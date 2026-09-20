@@ -1,4 +1,7 @@
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { parse } from 'yaml'
+import { merge } from './merge.js'
 import type { YamlValue } from './types.js'
 
 // The core schema keeps `yes`/`no`/`on`/`off` and dates as strings, unlike YAML 1.1.
@@ -27,6 +30,38 @@ export function yamlLayerFiles(mode: string): string[] {
   const names = ['config.default.yml', `config.${mode}.yml`, 'config.local.yml']
   // A mode of `default` or `local` would otherwise name the same file twice.
   return [...new Set(names)]
+}
+
+export interface YamlLayersResult {
+  data: { [key: string]: YamlValue }
+  /** Absolute paths of the files that existed and were read, in load order. */
+  files: string[]
+}
+
+/** Read and merge every YAML layer under `root`. Missing files are skipped. */
+export function loadYamlLayers(root: string, mode: string): YamlLayersResult {
+  let data: { [key: string]: YamlValue } = {}
+  const files: string[] = []
+
+  for (const name of yamlLayerFiles(mode)) {
+    const file = resolve(root, name)
+    const text = read(file)
+    if (text === undefined) continue
+    data = merge(data, parseYamlDocument(text, file)) as { [key: string]: YamlValue }
+    files.push(file)
+  }
+
+  return { data, files }
+}
+
+function read(file: string): string | undefined {
+  try {
+    return readFileSync(file, 'utf8')
+  } catch (error) {
+    const code = (error as { code?: string }).code
+    if (code === 'ENOENT' || code === 'ENOTDIR') return undefined
+    throw error
+  }
 }
 
 function describe(value: unknown): string {
