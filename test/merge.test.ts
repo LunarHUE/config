@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { getPath, merge } from '../src/merge.js'
+import { getPath, merge } from '../src/merge'
 
 describe('merge', () => {
   test('recurses into nested objects', () => {

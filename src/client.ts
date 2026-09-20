@@ -1,9 +1,9 @@
-import { BoundaryError } from './errors.js'
-import type { ConfigDefinition, InferSection, Section } from './types.js'
+import { BoundaryError } from './errors'
+import type { ConfigDefinition, InferSection, Section } from './types'
 
-export { env, file } from './sources.js'
-export { BoundaryError, ConfigError, RootNotFoundError } from './errors.js'
-export type { ConfigDefinition, ConfigOptions, InferSection, Source } from './types.js'
+export { env, file } from './sources'
+export { BoundaryError, ConfigError, RootNotFoundError } from './errors'
+export type { ConfigDefinition, ConfigOptions, InferSection, Source } from './types'
 
 /** Name of the global the Vite plugin defines and `serializeClient` writes. */
 export const APP_CONFIG_GLOBAL = '__APP_CONFIG__'

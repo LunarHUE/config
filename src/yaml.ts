@@ -1,8 +1,8 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { parse } from 'yaml'
-import { merge } from './merge.js'
-import type { YamlValue } from './types.js'
+import { merge } from './merge'
+import type { YamlValue } from './types'
 
 // The core schema keeps `yes`/`no`/`on`/`off` and dates as strings, unlike YAML 1.1.
 // Merge keys (`<<`) stay off, so layering is the only thing that combines mappings.

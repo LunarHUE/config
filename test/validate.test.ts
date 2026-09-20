@@ -2,10 +2,10 @@ import { type } from 'arktype'
 import { describe, expect, test } from 'bun:test'
 import * as v from 'valibot'
 import { z } from 'zod'
-import { ConfigError } from '../src/errors.js'
-import { env, file } from '../src/sources.js'
-import type { ConfigDefinition } from '../src/types.js'
-import { validate } from '../src/validate.js'
+import { ConfigError } from '../src/errors'
+import { env, file } from '../src/sources'
+import type { ConfigDefinition } from '../src/types'
+import { validate } from '../src/validate'
 
 const defaults = { emptyStringAsUndefined: true }
 

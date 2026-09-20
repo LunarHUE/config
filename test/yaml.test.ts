@@ -2,7 +2,7 @@ import { afterAll, describe, expect, test } from 'bun:test'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { loadYamlLayers, parseYamlDocument, yamlLayerFiles } from '../src/yaml.js'
+import { loadYamlLayers, parseYamlDocument, yamlLayerFiles } from '../src/yaml'
 
 function tempRoot(files: Record<string, string>): string {
   const root = mkdtempSync(join(tmpdir(), 'lunarhue-config-'))

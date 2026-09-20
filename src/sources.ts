@@ -1,5 +1,5 @@
 import type { StandardSchemaV1 } from '@standard-schema/spec'
-import type { Source } from './types.js'
+import type { Source } from './types'
 
 /** Read one key from the merged env layers. */
 export function env<T>(name: string, schema: StandardSchemaV1<unknown, T>): Source<T> {

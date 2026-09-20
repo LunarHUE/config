@@ -4,8 +4,8 @@ import path from 'node:path'
 
 import { afterAll, describe, expect, test } from 'bun:test'
 
-import { envLayerFiles, loadEnvLayers, parseDotenv } from '../src/dotenv.js'
-import type { EnvMap } from '../src/types.js'
+import { envLayerFiles, loadEnvLayers, parseDotenv } from '../src/dotenv'
+import type { EnvMap } from '../src/types'
 
 describe('parseDotenv', () => {
   test('reads one pair per line', () => {

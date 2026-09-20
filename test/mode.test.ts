@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { DEFAULT_MODE, resolveMode } from '../src/mode.js'
+import { DEFAULT_MODE, resolveMode } from '../src/mode'
 
 describe('resolveMode', () => {
   test('the option wins over both env vars', () => {

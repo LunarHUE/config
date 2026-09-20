@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { z } from 'zod'
-import { env, file } from '../src/sources.js'
+import { env, file } from '../src/sources'
 
 describe('sources', () => {
   test('env records the var name and schema', () => {

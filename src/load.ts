@@ -1,12 +1,12 @@
 import path from 'node:path'
 
-import { loadEnvLayers } from './dotenv.js'
-import { RootNotFoundError } from './errors.js'
-import { resolveMode } from './mode.js'
-import { findRoot } from './root.js'
-import type { ConfigDefinition, LoadResult, Section, YamlValue } from './types.js'
-import { validate } from './validate.js'
-import { loadYamlLayers } from './yaml.js'
+import { loadEnvLayers } from './dotenv'
+import { RootNotFoundError } from './errors'
+import { resolveMode } from './mode'
+import { findRoot } from './root'
+import type { ConfigDefinition, LoadResult, Section, YamlValue } from './types'
+import { validate } from './validate'
+import { loadYamlLayers } from './yaml'
 
 /** Read every layer, validate once, and return both sections. Eager and synchronous. */
 export function loadConfig<S extends Section, C extends Section>(

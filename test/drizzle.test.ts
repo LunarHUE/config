@@ -3,7 +3,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { z } from 'zod'
-import { defineConfig, env, loadConfig } from '../src/index.js'
+import { defineConfig, env, loadConfig } from '../src/index'
 
 const DB = 'DRIZZLE_TEST_DATABASE_URL'
 

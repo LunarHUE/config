@@ -1,4 +1,4 @@
-import type { SourceKind } from './types.js'
+import type { SourceKind } from './types'
 
 export interface ConfigIssue {
   section: 'server' | 'client'

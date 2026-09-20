@@ -3,9 +3,9 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { z } from 'zod'
-import { ConfigError, RootNotFoundError } from '../src/errors.js'
-import { loadConfig } from '../src/load.js'
-import { env, file } from '../src/sources.js'
+import { ConfigError, RootNotFoundError } from '../src/errors'
+import { loadConfig } from '../src/load'
+import { env, file } from '../src/sources'
 
 const temps: string[] = []
 const envKeys: string[] = []

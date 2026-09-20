@@ -1,8 +1,8 @@
 import { describe, expect, expectTypeOf, test } from 'bun:test'
 import { z } from 'zod'
-import { DEFINITION, createLazyConfig, type Config, type InferConfig } from '../src/proxy.js'
-import { env, file } from '../src/sources.js'
-import type { LoadResult } from '../src/types.js'
+import { DEFINITION, createLazyConfig, type Config, type InferConfig } from '../src/proxy'
+import { env, file } from '../src/sources'
+import type { LoadResult } from '../src/types'
 
 const definition = {
   server: { databaseUrl: env('DATABASE_URL', z.string()) },

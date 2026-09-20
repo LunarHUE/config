@@ -1,4 +1,4 @@
-import type { ConfigDefinition, InferSection, LoadResult, Section } from './types.js'
+import type { ConfigDefinition, InferSection, LoadResult, Section } from './types'
 
 /** Key that carries the definition back out of a `Config`, for the Vite plugin. */
 export const DEFINITION: unique symbol = Symbol.for('@lunarhue/config.definition')

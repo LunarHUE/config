@@ -1,4 +1,4 @@
-import type { EnvMap } from './types.js'
+import type { EnvMap } from './types'
 
 export const DEFAULT_MODE = 'development'
 

@@ -1,7 +1,7 @@
 import type { StandardSchemaV1 } from '@standard-schema/spec'
-import { ConfigError, type ConfigIssue } from './errors.js'
-import { getPath } from './merge.js'
-import type { ConfigDefinition, EnvMap, InferSection, Section, Source, YamlValue } from './types.js'
+import { ConfigError, type ConfigIssue } from './errors'
+import { getPath } from './merge'
+import type { ConfigDefinition, EnvMap, InferSection, Section, Source, YamlValue } from './types'
 
 export interface ValidateOptions {
   emptyStringAsUndefined: boolean

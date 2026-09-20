@@ -1,8 +1,8 @@
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { z } from 'zod'
-import { APP_CONFIG_GLOBAL, BoundaryError, defineConfig } from '../src/client.js'
-import { env, file } from '../src/sources.js'
+import { APP_CONFIG_GLOBAL, BoundaryError, defineConfig } from '../src/client'
+import { env, file } from '../src/sources'
 
 const definition = {
   server: { databaseUrl: env('DATABASE_URL', z.string()) },

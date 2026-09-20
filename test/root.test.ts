@@ -2,7 +2,7 @@ import { afterEach, expect, test } from 'bun:test'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { ROOT_MARKER, findRoot } from '../src/root.js'
+import { ROOT_MARKER, findRoot } from '../src/root'
 
 const temps: string[] = []
 

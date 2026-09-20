@@ -1,4 +1,4 @@
-import type { YamlValue } from './types.js'
+import type { YamlValue } from './types'
 
 type YamlObject = { [key: string]: YamlValue }
 

@@ -1,7 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 
-import type { EnvMap } from './types.js'
+import type { EnvMap } from './types'
 
 const KEY_RE = /^[A-Za-z_][A-Za-z0-9_]*$/
 
