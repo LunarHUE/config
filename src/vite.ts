@@ -1,6 +1,8 @@
+import type { Plugin } from 'vite'
+
 import { loadConfig } from './load'
 import { type Config, DEFINITION } from './proxy'
-import type { ConfigDefinition, Section } from './types'
+import type { ConfigDefinition, InferSection, Section } from './types'
 
 /** Name of the global the browser half reads. Kept in step with the one in client.ts. */
 export const APP_CONFIG_GLOBAL = '__APP_CONFIG__'
@@ -19,6 +21,26 @@ export function serializeClient<S extends Section, C extends Section>(
 ): string {
   const { client } = loadConfig(toDefinition(config))
   return `globalThis.${APP_CONFIG_GLOBAL}=${escapeForScript(JSON.stringify(client))};`
+}
+
+/**
+ * Vite plugin that bakes the client section into the bundle. The load happens in
+ * the `config` hook, so errors surface while Vite resolves its config, and the
+ * result is cached so a second call to the hook does not read the files again.
+ * Changing a YAML file in dev needs a restart.
+ */
+export default function appConfig<S extends Section, C extends Section>(
+  config: ConfigInput<S, C>,
+): Plugin {
+  let client: InferSection<C> | undefined
+
+  return {
+    name: 'lunarhue-config',
+    config() {
+      if (client === undefined) client = loadConfig(toDefinition(config)).client
+      return { define: { [`globalThis.${APP_CONFIG_GLOBAL}`]: JSON.stringify(client) } }
+    },
+  }
 }
 
 function toDefinition<S extends Section, C extends Section>(

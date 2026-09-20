@@ -3,9 +3,10 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { z } from 'zod'
+import type { Plugin } from 'vite'
 import { defineConfig } from '../src/index'
 import { env, file } from '../src/sources'
-import { APP_CONFIG_GLOBAL, serializeClient } from '../src/vite'
+import appConfig, { APP_CONFIG_GLOBAL, serializeClient } from '../src/vite'
 
 const temps: string[] = []
 const envKeys: string[] = []
@@ -90,5 +91,83 @@ describe('serializeClient', () => {
     }
 
     expect(serializeClient(defineConfig(definition))).toBe(serializeClient(definition))
+  })
+})
+
+/** Call the plugin's config hook the way Vite does and return the define map. */
+function callConfigHook(plugin: Plugin): Record<string, string> {
+  const hook = plugin.config
+  if (typeof hook !== 'function') throw new Error('expected a plain function config hook')
+  const result = hook.call(undefined as never, {}, { command: 'build', mode: 'production' })
+  if (result === null || result === undefined || result instanceof Promise) {
+    throw new Error('expected the hook to return a config object')
+  }
+  return (result.define ?? {}) as Record<string, string>
+}
+
+function read(relative: string): string {
+  return fs.readFileSync(new URL(`../${relative}`, import.meta.url), 'utf8')
+}
+
+describe('the vite plugin', () => {
+  test('is named lunarhue-config', () => {
+    expect(appConfig({ client: {} }).name).toBe('lunarhue-config')
+  })
+
+  test('defines the client section on the global', () => {
+    const DB = envKey('VITE_PLUGIN_DATABASE_URL')
+    const root = tempRoot({
+      '.env': `${DB}=postgres://localhost/app\n`,
+      'config.default.yml': 'app:\n  name: shop\n',
+    })
+
+    const define = callConfigHook(
+      appConfig({
+        root,
+        mode: 'test',
+        server: { databaseUrl: env(DB, z.string()) },
+        client: { appName: file('app.name', z.string()) },
+      }),
+    )
+
+    expect(Object.keys(define)).toEqual([`globalThis.${APP_CONFIG_GLOBAL}`])
+    const value = define[`globalThis.${APP_CONFIG_GLOBAL}`] as string
+    expect(JSON.parse(value)).toEqual({ appName: 'shop' })
+    expect(value).not.toContain('databaseUrl')
+  })
+
+  test('loads once even when the hook runs twice', () => {
+    const root = tempRoot({ 'config.default.yml': 'app:\n  name: shop\n' })
+    const plugin = appConfig({
+      root,
+      mode: 'test',
+      client: { appName: file('app.name', z.string()) },
+    })
+
+    const first = callConfigHook(plugin)
+    fs.rmSync(path.join(root, 'config.default.yml'))
+
+    expect(callConfigHook(plugin)).toEqual(first)
+  })
+})
+
+describe('the vite module', () => {
+  test('uses the same global name as the client entry', () => {
+    const literal = (source: string): string => {
+      const match = /APP_CONFIG_GLOBAL = '([^']+)'/.exec(read(source))
+      if (match?.[1] === undefined) throw new Error(`no APP_CONFIG_GLOBAL in ${source}`)
+      return match[1]
+    }
+
+    expect(literal('src/vite.ts')).toBe(literal('src/client.ts'))
+  })
+
+  test('imports nothing from vite at runtime', () => {
+    const lines = read('src/vite.ts')
+      .split('\n')
+      .filter((line) => line.includes("from 'vite'"))
+
+    expect(lines.length).toBeGreaterThan(0)
+    for (const line of lines) expect(line.startsWith('import type ')).toBe(true)
   })
 })
