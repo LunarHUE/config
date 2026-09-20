@@ -1,3 +1,8 @@
+import fs from 'node:fs'
+import path from 'node:path'
+
+import type { EnvMap } from './types.js'
+
 const KEY_RE = /^[A-Za-z_][A-Za-z0-9_]*$/
 
 /** Parse .env text into key/value pairs. */
@@ -50,4 +55,50 @@ function unescape(value: string): string {
         return ch
     }
   })
+}
+
+/** File names for a mode, lowest precedence first. */
+export function envLayerFiles(mode: string): string[] {
+  return ['.env', '.env.local', `.env.${mode}`, `.env.${mode}.local`]
+}
+
+export interface EnvLayersResult {
+  /** The merged env. Keys from `processEnv` win over every file. */
+  env: EnvMap
+  /** Absolute paths of the files that existed and were read, in load order. */
+  files: string[]
+}
+
+/**
+ * Read every .env layer under `root`, merge them (later file wins), then apply
+ * `processEnv` on top. Writes file values into `processEnv` for keys it does
+ * not already have, so code that reads process.env directly sees them.
+ *
+ * The returned `env` is the `processEnv` object itself, after that mutation.
+ */
+export function loadEnvLayers(
+  root: string,
+  mode: string,
+  processEnv: EnvMap = process.env,
+): EnvLayersResult {
+  const files: string[] = []
+  const merged: Record<string, string> = {}
+
+  for (const name of envLayerFiles(mode)) {
+    const file = path.resolve(root, name)
+    let text: string
+    try {
+      text = fs.readFileSync(file, 'utf8')
+    } catch {
+      continue
+    }
+    files.push(file)
+    Object.assign(merged, parseDotenv(text))
+  }
+
+  for (const [key, value] of Object.entries(merged)) {
+    if (!(key in processEnv)) processEnv[key] = value
+  }
+
+  return { env: processEnv, files }
 }
