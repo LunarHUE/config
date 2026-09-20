@@ -1,0 +1,7 @@
+node_modules/
+dist/
+.direnv/
+*.local.yml
+.env
+.env.*
+!.env.example

@@ -1,0 +1,52 @@
+{
+  "name": "@lunarhue/config",
+  "version": "0.0.0",
+  "description": "Layered YAML and .env config with Standard Schema validation and a server/client split",
+  "license": "MIT",
+  "type": "module",
+  "sideEffects": false,
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "browser": "./dist/client.js",
+      "default": "./dist/index.js"
+    },
+    "./vite": {
+      "types": "./dist/vite.d.ts",
+      "default": "./dist/vite.js"
+    }
+  },
+  "scripts": {
+    "build": "rm -rf dist && tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "bun test",
+    "prepublishOnly": "bun run typecheck && bun run test && bun run build"
+  },
+  "engines": {
+    "node": ">=22",
+    "bun": ">=1.2"
+  },
+  "peerDependencies": {
+    "vite": ""
+  },
+  "peerDependenciesMeta": {
+    "vite": {
+      "optional": true
+    }
+  },
+  "dependencies": {
+    "yaml": "^2.9.1"
+  },
+  "devDependencies": {
+    "@standard-schema/spec": "^1.1.0",
+    "@types/node": "^26.6.2",
+    "arktype": "^2.2.3",
+    "bun-types": "^1.4.2",
+    "typescript": "^7.0.2",
+    "valibot": "^1.5.0",
+    "zod": "^4.6.5"
+  }
+}
