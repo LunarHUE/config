@@ -28,3 +28,17 @@ export function merge(base: YamlValue, override: YamlValue): YamlValue {
   }
   return out
 }
+
+/** Read a dotted path such as `logging.level` from a merged document. Returns undefined when any segment is missing. */
+export function getPath(doc: YamlValue, path: string): YamlValue | undefined {
+  if (path === '') return doc
+
+  let current: YamlValue = doc
+  for (const segment of path.split('.')) {
+    if (!isObject(current)) return undefined
+    const next = current[segment]
+    if (next === undefined) return undefined
+    current = next
+  }
+  return current
+}

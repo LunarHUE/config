@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { merge } from '../src/merge.js'
+import { getPath, merge } from '../src/merge.js'
 
 describe('merge', () => {
   test('recurses into nested objects', () => {
@@ -56,5 +56,36 @@ describe('merge', () => {
     expect(merge({ logging: false }, { logging: { level: 'info' } })).toEqual({
       logging: { level: 'info' },
     })
+  })
+})
+
+describe('getPath', () => {
+  const doc = {
+    logging: { level: 'debug', sinks: ['stdout'] },
+    sentry: { dsn: null },
+    port: 3000,
+  }
+
+  test('reads a nested value', () => {
+    expect(getPath(doc, 'logging.level')).toBe('debug')
+  })
+
+  test('returns undefined for a missing segment', () => {
+    expect(getPath(doc, 'logging.format')).toBeUndefined()
+    expect(getPath(doc, 'redis.url')).toBeUndefined()
+  })
+
+  test('returns undefined when a segment walks into a non-object', () => {
+    expect(getPath(doc, 'port.value')).toBeUndefined()
+    expect(getPath(doc, 'logging.sinks.0')).toBeUndefined()
+    expect(getPath(doc, 'logging.level.length')).toBeUndefined()
+  })
+
+  test('returns a stored null as null, not undefined', () => {
+    expect(getPath(doc, 'sentry.dsn')).toBeNull()
+  })
+
+  test('an empty path is the whole document', () => {
+    expect(getPath(doc, '')).toBe(doc)
   })
 })
