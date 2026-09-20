@@ -20,7 +20,7 @@
     }
   },
   "scripts": {
-    "build": "rm -rf dist && tsc -p tsconfig.build.json",
+    "build": "tsdown",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "bun test",
     "prepublishOnly": "bun run typecheck && bun run test && bun run build"
@@ -45,6 +45,7 @@
     "@types/node": "^26.6.2",
     "arktype": "^2.2.3",
     "bun-types": "^1.4.2",
+    "tsdown": "^0.23.0",
     "typescript": "^7.0.2",
     "valibot": "^1.5.0",
     "vite": "^7",
