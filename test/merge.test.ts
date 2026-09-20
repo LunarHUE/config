@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'bun:test'
+import { describe, expect, test } from 'vitest'
 import { getPath, merge } from '../src/merge'
 
 describe('merge', () => {

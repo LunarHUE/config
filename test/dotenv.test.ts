@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 
-import { afterAll, describe, expect, test } from 'bun:test'
+import { afterAll, describe, expect, test } from 'vitest'
 
 import { envLayerFiles, loadEnvLayers, parseDotenv } from '../src/dotenv'
 import type { EnvMap } from '../src/types'

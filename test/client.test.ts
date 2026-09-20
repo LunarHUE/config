@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'bun:test'
+import { describe, expect, test } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { z } from 'zod'
 import { APP_CONFIG_GLOBAL, BoundaryError, defineConfig } from '../src/client'

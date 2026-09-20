@@ -1,4 +1,4 @@
-import { describe, expect, expectTypeOf, test } from 'bun:test'
+import { describe, expect, expectTypeOf, test } from 'vitest'
 import { z } from 'zod'
 import { DEFINITION, createLazyConfig, type Config, type InferConfig } from '../src/proxy'
 import { env, file } from '../src/sources'

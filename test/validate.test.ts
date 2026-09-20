@@ -1,5 +1,5 @@
 import { type } from 'arktype'
-import { describe, expect, test } from 'bun:test'
+import { describe, expect, test } from 'vitest'
 import * as v from 'valibot'
 import { z } from 'zod'
 import { ConfigError } from '../src/errors'
