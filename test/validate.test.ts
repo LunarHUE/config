@@ -63,12 +63,7 @@ describe('validate', () => {
 
   test('the message lists every issue under one heading', () => {
     const error = expectConfigError(() =>
-      validate(
-        { server: { databaseUrl: env('DATABASE_URL', z.string()) } },
-        {},
-        {},
-        defaults,
-      ),
+      validate({ server: { databaseUrl: env('DATABASE_URL', z.string()) } }, {}, {}, defaults),
     )
 
     const [heading, line] = error.message.split('\n')
@@ -172,7 +167,12 @@ describe('validate', () => {
     }
 
     expect(() =>
-      validate({ server: { slow: { kind: 'env', path: 'SLOW', schema: asyncSchema } } }, {}, {}, defaults),
+      validate(
+        { server: { slow: { kind: 'env', path: 'SLOW', schema: asyncSchema } } },
+        {},
+        {},
+        defaults,
+      ),
     ).toThrow(/Async schemas are not supported.*server\.slow/)
   })
 })

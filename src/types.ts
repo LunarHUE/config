@@ -55,9 +55,4 @@ export type EnvMap = Record<string, string | undefined>
 
 /** A parsed YAML document. Layers are merged into one of these. */
 export type YamlValue =
-  | string
-  | number
-  | boolean
-  | null
-  | YamlValue[]
-  | { [key: string]: YamlValue }
+  string | number | boolean | null | YamlValue[] | { [key: string]: YamlValue }

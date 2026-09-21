@@ -20,15 +20,15 @@ npm i @lunarhue/config
 
 Create these files at the repo root.
 
-| File | Committed | Purpose |
-| --- | --- | --- |
-| `config.default.yml` | yes | Base values. Also the marker that identifies the repo root. |
-| `config.<mode>.yml` | yes | Per-mode overrides, for example `config.production.yml`. |
-| `config.local.yml` | no | Your machine's overrides. |
-| `.env` | no | Secrets shared by every mode. |
-| `.env.local` | no | Your machine's secrets. |
-| `.env.<mode>` | no | Secrets for one mode. |
-| `.env.<mode>.local` | no | Per-mode secrets. |
+| File                 | Committed | Purpose                                                     |
+| -------------------- | --------- | ----------------------------------------------------------- |
+| `config.default.yml` | yes       | Base values. Also the marker that identifies the repo root. |
+| `config.<mode>.yml`  | yes       | Per-mode overrides, for example `config.production.yml`.    |
+| `config.local.yml`   | no        | Your machine's overrides.                                   |
+| `.env`               | no        | Secrets shared by every mode.                               |
+| `.env.local`         | no        | Your machine's secrets.                                     |
+| `.env.<mode>`        | no        | Secrets for one mode.                                       |
+| `.env.<mode>.local`  | no        | Per-mode secrets.                                           |
 
 `config.default.yml`:
 

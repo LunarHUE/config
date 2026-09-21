@@ -9,8 +9,7 @@ export const APP_CONFIG_GLOBAL = '__APP_CONFIG__'
 
 /** Either half of the public API: a lazy `Config` or the definition it wraps. */
 export type ConfigInput<S extends Section = Section, C extends Section = Section> =
-  | Config<S, C>
-  | ConfigDefinition<S, C>
+  Config<S, C> | ConfigDefinition<S, C>
 
 /**
  * JavaScript that assigns the client section to the global. Safe to inline in a

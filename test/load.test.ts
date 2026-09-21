@@ -160,7 +160,11 @@ describe('loadConfig', () => {
     const before = process.cwd()
     try {
       process.chdir(base)
-      const result = loadConfig({ root: 'repo', mode: 'test', client: { a: file('a', z.number()) } })
+      const result = loadConfig({
+        root: 'repo',
+        mode: 'test',
+        client: { a: file('a', z.number()) },
+      })
       expect(result.root).toBe(nested)
       expect(result.client.a).toBe(1)
     } finally {
