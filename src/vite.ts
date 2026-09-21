@@ -1,8 +1,12 @@
+import path from 'node:path'
+
 import type { Plugin } from 'vite'
 
+import { envLayerFiles } from './dotenv'
 import { loadConfig } from './load'
 import { type Config, DEFINITION } from './proxy'
-import type { ConfigDefinition, InferSection, Section } from './types'
+import type { ConfigDefinition, LoadResult, Section } from './types'
+import { yamlLayerFiles } from './yaml'
 
 /** Name of the global the browser half reads. Kept in step with the one in client.ts. */
 export const APP_CONFIG_GLOBAL = '__APP_CONFIG__'
@@ -22,24 +26,65 @@ export function serializeClient<S extends Section, C extends Section>(
   return `globalThis.${APP_CONFIG_GLOBAL}=${escapeForScript(JSON.stringify(client))};`
 }
 
+export interface AppConfigOptions {
+  /** Restart the dev server when a config or .env file changes. Default `true`. */
+  watch?: boolean
+}
+
 /**
  * Vite plugin that bakes the client section into the bundle. The load happens in
  * the `config` hook, so errors surface while Vite resolves its config, and the
  * result is cached so a second call to the hook does not read the files again.
- * Changing a YAML file in dev needs a restart.
+ * In dev the plugin restarts the server when a layer changes, which runs the
+ * `config` hook again and bakes in the new values.
  */
 export default function appConfig<S extends Section, C extends Section>(
   config: ConfigInput<S, C>,
+  options: AppConfigOptions = {},
 ): Plugin {
-  let client: InferSection<C> | undefined
+  const watch = options.watch ?? true
+  let result: LoadResult<S, C> | undefined
+
+  function load(): LoadResult<S, C> {
+    if (result === undefined) result = loadConfig(toDefinition(config))
+    return result
+  }
 
   return {
     name: 'lunarhue-config',
     config() {
-      if (client === undefined) client = loadConfig(toDefinition(config)).client
+      const { client } = load()
       return { define: { [`globalThis.${APP_CONFIG_GLOBAL}`]: JSON.stringify(client) } }
     },
+    configureServer(server) {
+      if (!watch) return
+      const loaded = load()
+      const isLayer = layerTest(loaded)
+      server.watcher.add(loaded.files)
+
+      const changed = (file: string): void => {
+        if (!isLayer(file)) return
+        // Drop the cache so the config hook reloads after the restart.
+        result = undefined
+        void server.restart()
+      }
+
+      for (const event of ['change', 'add', 'unlink'] as const) server.watcher.on(event, changed)
+    },
   }
+}
+
+/**
+ * True for a file the load read, and for any layer file name inside one of the
+ * directories it read from, so a layer created later counts too.
+ */
+function layerTest(result: LoadResult<Section, Section>): (file: string) => boolean {
+  const files = new Set(result.files)
+  const dirs = new Set(result.dirs)
+  const names = new Set([...envLayerFiles(result.mode), ...yamlLayerFiles(result.mode)])
+
+  return (file) =>
+    files.has(file) || (dirs.has(path.dirname(file)) && names.has(path.basename(file)))
 }
 
 function toDefinition<S extends Section, C extends Section>(

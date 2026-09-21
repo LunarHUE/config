@@ -1,9 +1,9 @@
-import { afterEach, describe, expect, test } from 'vitest'
+import { afterEach, describe, expect, test, vi } from 'vitest'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { z } from 'zod'
-import type { Plugin } from 'vite'
+import type { Plugin, ViteDevServer } from 'vite'
 import { defineConfig } from '../src/index'
 import { env, file } from '../src/sources'
 import appConfig, { APP_CONFIG_GLOBAL, serializeClient } from '../src/vite'
@@ -105,6 +105,29 @@ function callConfigHook(plugin: Plugin): Record<string, string> {
   return (result.define ?? {}) as Record<string, string>
 }
 
+interface FakeServer {
+  watcher: { add: ReturnType<typeof vi.fn>; on: ReturnType<typeof vi.fn> }
+  restart: ReturnType<typeof vi.fn>
+}
+
+function fakeServer(): FakeServer {
+  return { watcher: { add: vi.fn(), on: vi.fn() }, restart: vi.fn() }
+}
+
+/** Call the plugin's configureServer hook the way Vite does. */
+function callConfigureServer(plugin: Plugin, server: FakeServer): void {
+  const hook = plugin.configureServer
+  if (typeof hook !== 'function') throw new Error('expected a plain function configureServer hook')
+  hook.call(undefined as never, server as unknown as ViteDevServer)
+}
+
+/** The listener the plugin registered for one watcher event. */
+function listener(server: FakeServer, event: string): (file: string) => void {
+  const call = server.watcher.on.mock.calls.find((args: unknown[]) => args[0] === event)
+  if (!call) throw new Error(`no ${event} listener`)
+  return call[1] as (file: string) => void
+}
+
 function read(relative: string): string {
   return fs.readFileSync(new URL(`../${relative}`, import.meta.url), 'utf8')
 }
@@ -148,6 +171,94 @@ describe('the vite plugin', () => {
     fs.rmSync(path.join(root, 'config.default.yml'))
 
     expect(callConfigHook(plugin)).toEqual(first)
+  })
+})
+
+describe('the vite plugin in dev', () => {
+  function devPlugin(extra: { watch?: boolean } = {}): { plugin: Plugin; root: string } {
+    const root = tempRoot({ '.env': 'UNUSED=1\n', 'config.default.yml': 'app:\n  name: shop\n' })
+    const plugin = appConfig(
+      { root, mode: 'test', client: { appName: file('app.name', z.string()) } },
+      extra,
+    )
+    return { plugin, root }
+  }
+
+  test('has a configureServer hook', () => {
+    expect(typeof appConfig({ client: {} }).configureServer).toBe('function')
+  })
+
+  test('watches every file the load read', () => {
+    const { plugin, root } = devPlugin()
+    const server = fakeServer()
+
+    callConfigureServer(plugin, server)
+
+    expect(server.watcher.add).toHaveBeenCalledWith([
+      path.join(root, '.env'),
+      path.join(root, 'config.default.yml'),
+    ])
+    expect(server.watcher.on.mock.calls.map((args: unknown[]) => args[0])).toEqual([
+      'change',
+      'add',
+      'unlink',
+    ])
+  })
+
+  test('a change to a loaded file restarts the server once', () => {
+    const { plugin, root } = devPlugin()
+    const server = fakeServer()
+
+    callConfigureServer(plugin, server)
+    listener(server, 'change')(path.join(root, 'config.default.yml'))
+
+    expect(server.restart).toHaveBeenCalledTimes(1)
+  })
+
+  test('a layer that did not exist at load time restarts the server', () => {
+    const { plugin, root } = devPlugin()
+    const server = fakeServer()
+
+    callConfigureServer(plugin, server)
+    listener(server, 'add')(path.join(root, 'config.local.yml'))
+
+    expect(server.restart).toHaveBeenCalledTimes(1)
+  })
+
+  test('an unrelated file does not restart the server', () => {
+    const { plugin, root } = devPlugin()
+    const server = fakeServer()
+
+    callConfigureServer(plugin, server)
+    listener(server, 'change')(path.join(root, 'src/main.ts'))
+
+    expect(server.restart).not.toHaveBeenCalled()
+  })
+
+  test('a restart makes the config hook read the files again', () => {
+    const { plugin, root } = devPlugin()
+    const server = fakeServer()
+
+    expect(callConfigHook(plugin)).toEqual(callConfigHook(plugin))
+    callConfigureServer(plugin, server)
+
+    fs.writeFileSync(path.join(root, 'config.default.yml'), 'app:\n  name: later\n')
+    listener(server, 'change')(path.join(root, 'config.default.yml'))
+
+    const define = callConfigHook(plugin)
+    expect(JSON.parse(define[`globalThis.${APP_CONFIG_GLOBAL}`] as string)).toEqual({
+      appName: 'later',
+    })
+  })
+
+  test('watch false registers nothing', () => {
+    const { plugin } = devPlugin({ watch: false })
+    const server = fakeServer()
+
+    callConfigureServer(plugin, server)
+
+    expect(server.watcher.add).not.toHaveBeenCalled()
+    expect(server.watcher.on).not.toHaveBeenCalled()
   })
 })
 
