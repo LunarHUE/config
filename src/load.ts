@@ -23,7 +23,7 @@ export function loadConfig<S extends Section, C extends Section>(
   const yaml =
     found === undefined
       ? { data: {} as { [key: string]: YamlValue }, files: [] as string[] }
-      : loadYamlLayers(root, mode)
+      : loadYamlLayers([root], mode)
 
   const { server, client } = validate(definition, env.env, yaml.data, {
     emptyStringAsUndefined: definition.emptyStringAsUndefined ?? true,

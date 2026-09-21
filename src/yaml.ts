@@ -38,17 +38,23 @@ export interface YamlLayersResult {
   files: string[]
 }
 
-/** Read and merge every YAML layer under `root`. Missing files are skipped. */
-export function loadYamlLayers(root: string, mode: string): YamlLayersResult {
+/**
+ * Read and merge the YAML layers in every directory of `dirs`, lowest
+ * precedence first. Missing files are skipped.
+ */
+export function loadYamlLayers(dirs: string[], mode: string): YamlLayersResult {
   let data: { [key: string]: YamlValue } = {}
   const files: string[] = []
+  const names = yamlLayerFiles(mode)
 
-  for (const name of yamlLayerFiles(mode)) {
-    const file = resolve(root, name)
-    const text = read(file)
-    if (text === undefined) continue
-    data = merge(data, parseYamlDocument(text, file)) as { [key: string]: YamlValue }
-    files.push(file)
+  for (const dir of dirs) {
+    for (const name of names) {
+      const file = resolve(dir, name)
+      const text = read(file)
+      if (text === undefined) continue
+      data = merge(data, parseYamlDocument(text, file)) as { [key: string]: YamlValue }
+      files.push(file)
+    }
   }
 
   return { data, files }

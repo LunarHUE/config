@@ -1,5 +1,5 @@
 import { afterAll, describe, expect, test } from 'vitest'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { loadYamlLayers, parseYamlDocument, yamlLayerFiles } from '../src/yaml'
@@ -68,6 +68,14 @@ describe('loadYamlLayers', () => {
     return dir
   }
 
+  /** A subdirectory of `parent` holding its own YAML layers. */
+  const sub = (parent: string, name: string, files: Record<string, string>) => {
+    const dir = join(parent, name)
+    mkdirSync(dir, { recursive: true })
+    for (const [file, text] of Object.entries(files)) writeFileSync(join(dir, file), text)
+    return dir
+  }
+
   afterAll(() => {
     for (const dir of roots) rmSync(dir, { recursive: true, force: true })
   })
@@ -79,7 +87,7 @@ describe('loadYamlLayers', () => {
       'config.local.yml': 'port: 8080\nsentry: null\n',
     })
 
-    const { data } = loadYamlLayers(dir, 'dev')
+    const { data } = loadYamlLayers([dir], 'dev')
     expect(data).toEqual({
       port: 8080,
       logging: { level: 'debug', file: 'app.log' },
@@ -95,17 +103,51 @@ describe('loadYamlLayers', () => {
       'config.production.yml': 'port: 80\n',
     })
 
-    const { files } = loadYamlLayers(dir, 'dev')
+    const { files } = loadYamlLayers([dir], 'dev')
     expect(files).toEqual([join(dir, 'config.default.yml'), join(dir, 'config.local.yml')])
   })
 
   test('no files at all gives an empty document and no files', () => {
     const dir = root({})
-    expect(loadYamlLayers(dir, 'dev')).toEqual({ data: {}, files: [] })
+    expect(loadYamlLayers([dir], 'dev')).toEqual({ data: {}, files: [] })
   })
 
   test('a broken layer throws with its path', () => {
     const dir = root({ 'config.default.yml': 'a: [1, 2\n' })
-    expect(() => loadYamlLayers(dir, 'dev')).toThrow(/config\.default\.yml/)
+    expect(() => loadYamlLayers([dir], 'dev')).toThrow(/config\.default\.yml/)
+  })
+
+  test('a later directory merges nested objects over an earlier one', () => {
+    const dir = root({
+      'config.default.yml': 'logging:\n  level: info\n  file: app.log\nport: 3000\n',
+    })
+    const pkg = sub(dir, 'apps/api', { 'config.default.yml': 'logging:\n  level: debug\n' })
+
+    const { data } = loadYamlLayers([dir, pkg], 'dev')
+    expect(data).toEqual({ logging: { level: 'debug', file: 'app.log' }, port: 3000 })
+  })
+
+  test('an array in a later directory replaces the earlier one', () => {
+    const dir = root({ 'config.default.yml': 'hosts: [a, b]\n' })
+    const pkg = sub(dir, 'apps/api', { 'config.default.yml': 'hosts: [z]\n' })
+
+    const { data } = loadYamlLayers([dir, pkg], 'dev')
+    expect(data).toEqual({ hosts: ['z'] })
+  })
+
+  test('files lists every directory in order, all layers of one before the next', () => {
+    const dir = root({ 'config.default.yml': 'a: 1\n', 'config.dev.yml': 'a: 2\n' })
+    const pkg = sub(dir, 'apps/api', {
+      'config.default.yml': 'a: 3\n',
+      'config.local.yml': 'a: 4\n',
+    })
+
+    const { files } = loadYamlLayers([dir, pkg], 'dev')
+    expect(files).toEqual([
+      join(dir, 'config.default.yml'),
+      join(dir, 'config.dev.yml'),
+      join(pkg, 'config.default.yml'),
+      join(pkg, 'config.local.yml'),
+    ])
   })
 })
