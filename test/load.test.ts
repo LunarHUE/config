@@ -160,6 +160,50 @@ describe('loadConfig', () => {
     }
   })
 
+  test('a definition with nested groups loads from both kinds of layer', () => {
+    const DB = envKey('LOAD_NESTED_DATABASE_URL')
+    const POOL = envKey('LOAD_NESTED_DATABASE_POOL_MAX')
+    const SECRET = envKey('LOAD_NESTED_CLERK_SECRET_KEY')
+    const root = tempRoot({
+      '.env': `${DB}=postgres://localhost/app\n${POOL}=20\n${SECRET}=sk_test\n`,
+      'config.default.yml': [
+        'api:',
+        '  port: 3000',
+        'app:',
+        '  url: https://app.example.com',
+        'telemetry:',
+        '  api:',
+        '    serviceName: api',
+        'logging:',
+        '  level: info',
+        '',
+      ].join('\n'),
+    })
+
+    const result = loadConfig({
+      root,
+      mode: 'test',
+      server: {
+        port: file('api.port', z.number().int().min(1).max(65535)),
+        appOrigin: file('app.url', z.url()),
+        database: {
+          url: env(DB, z.url()),
+          poolMax: env(POOL, z.coerce.number().int().positive().optional()),
+        },
+        clerk: { secretKey: env(SECRET, z.string().min(1)) },
+        telemetry: { serviceName: file('telemetry.api.serviceName', z.string().min(1)) },
+        logLevel: file('logging.level', z.enum(['debug', 'info', 'warn', 'error'])),
+      },
+    })
+
+    expect(result.server.database.url).toBe('postgres://localhost/app')
+    expect(result.server.database.poolMax).toBe(20)
+    expect(result.server.clerk.secretKey).toBe('sk_test')
+    expect(result.server.telemetry.serviceName).toBe('api')
+    expect(result.server.port).toBe(3000)
+    expect(result.server.logLevel).toBe('info')
+  })
+
   test('an env-only definition works without a root', () => {
     const KEY = envKey('LOAD_NO_ROOT_KEY')
     const dir = tempRoot({ '.env': `${KEY}=from-file\n` })

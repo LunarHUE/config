@@ -159,6 +159,31 @@ describe('the vite plugin', () => {
     expect(value).not.toContain('databaseUrl')
   })
 
+  test('a nested client group stays nested in the define value', () => {
+    const API = envKey('VITE_PLUGIN_PUBLIC_API_URL')
+    const root = tempRoot({
+      '.env': `${API}=https://api.example.com\n`,
+      'config.default.yml': 'app:\n  name: shop\nui:\n  theme: dark\n',
+    })
+
+    const define = callConfigHook(
+      appConfig({
+        root,
+        mode: 'test',
+        client: {
+          appName: file('app.name', z.string()),
+          ui: { theme: file('ui.theme', z.string()), apiUrl: env(API, z.string()) },
+        },
+      }),
+    )
+
+    const value = define[`globalThis.${APP_CONFIG_GLOBAL}`] as string
+    expect(JSON.parse(value)).toEqual({
+      appName: 'shop',
+      ui: { theme: 'dark', apiUrl: 'https://api.example.com' },
+    })
+  })
+
   test('loads once even when the hook runs twice', () => {
     const root = tempRoot({ 'config.default.yml': 'app:\n  name: shop\n' })
     const plugin = appConfig({
