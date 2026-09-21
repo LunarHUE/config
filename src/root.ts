@@ -14,3 +14,8 @@ export function findRoot(cwd: string): string | undefined {
     dir = parent
   }
 }
+
+/** True when `dir` itself holds the root marker. */
+export function hasRootMarker(dir: string): boolean {
+  return fs.statSync(path.join(dir, ROOT_MARKER), { throwIfNoEntry: false })?.isFile() ?? false
+}

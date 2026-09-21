@@ -20,6 +20,14 @@ function tempRoot(files: Record<string, string> = {}): string {
   return root
 }
 
+/** A subdirectory of `root` holding its own layers. */
+function packageDir(root: string, name: string, files: Record<string, string> = {}): string {
+  const dir = path.join(root, name)
+  fs.mkdirSync(dir, { recursive: true })
+  for (const [file, text] of Object.entries(files)) fs.writeFileSync(path.join(dir, file), text)
+  return dir
+}
+
 /** loadEnvLayers writes into process.env, so every test uses fresh names and cleans up. */
 function envKey(name: string): string {
   envKeys.push(name)
@@ -158,5 +166,65 @@ describe('loadConfig', () => {
     } finally {
       process.chdir(before)
     }
+  })
+
+  test('dir discovers the root from its parent and layers on top of it', () => {
+    const KEY = envKey('LOAD_DIR_KEY')
+    const root = tempRoot({
+      '.env': `${KEY}=root\n`,
+      'config.default.yml': 'app:\n  name: Acme\n  region: us\n',
+    })
+    const dir = packageDir(root, 'apps/api', {
+      '.env': `${KEY}=api\n`,
+      'config.default.yml': 'app:\n  name: Api\n',
+    })
+
+    const result = loadConfig({
+      dir,
+      mode: 'test',
+      server: { key: env(KEY, z.string()) },
+      client: {
+        name: file('app.name', z.string()),
+        region: file('app.region', z.string()),
+      },
+    })
+
+    expect(result.root).toBe(root)
+    expect(result.dirs).toEqual([root, dir])
+    expect(result.server.key).toBe('api')
+    expect(result.client.name).toBe('Api')
+    expect(result.client.region).toBe('us')
+  })
+
+  test('a dir that is itself the root reads one layer set', () => {
+    const root = tempRoot({ '.env': 'IGNORED=1\n', 'config.default.yml': 'a: 1\n' })
+
+    const result = loadConfig({ dir: root, mode: 'test', client: { a: file('a', z.number()) } })
+
+    expect(result.root).toBe(root)
+    expect(result.dirs).toEqual([root])
+    expect(result.files).toEqual([path.join(root, '.env'), path.join(root, 'config.default.yml')])
+  })
+
+  test('dir becomes the root when no marker exists and every key is an env key', () => {
+    const base = tempRoot()
+    const dir = packageDir(base, 'packages/db', { '.env': `${envKey('LOAD_DIR_ONLY')}=yes\n` })
+
+    const result = loadConfig({
+      dir,
+      mode: 'test',
+      server: { key: env('LOAD_DIR_ONLY', z.string()) },
+    })
+
+    expect(result.root).toBe(dir)
+    expect(result.dirs).toEqual([dir])
+    expect(result.server.key).toBe('yes')
+  })
+
+  test('dirs holds the one root when no dir is given', () => {
+    const root = tempRoot({ 'config.default.yml': 'a: 1\n' })
+    const result = loadConfig({ root, mode: 'test', client: { a: file('a', z.number()) } })
+
+    expect(result.dirs).toEqual([root])
   })
 })

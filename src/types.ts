@@ -15,6 +15,12 @@ export type Section = Record<string, Source>
 export interface ConfigOptions {
   /** Skip root discovery and use this directory. */
   root?: string
+  /**
+   * Directory of the package that owns this definition, usually
+   * `import.meta.dirname`. Its config and .env files load after the root's.
+   * Relative paths resolve against the cwd.
+   */
+  dir?: string
   /** Override `APP_ENV` and `NODE_ENV`. */
   mode?: string
   /** Treat empty env values as `undefined` before validation. Default `true`. */
@@ -38,6 +44,8 @@ export interface LoadResult<S extends Section = Section, C extends Section = Sec
   client: InferSection<C>
   mode: string
   root: string
+  /** The directories the loader read from, lowest precedence first. */
+  dirs: string[]
   /** Every file the loader read, in load order. */
   files: string[]
 }

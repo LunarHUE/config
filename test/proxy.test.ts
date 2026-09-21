@@ -23,6 +23,7 @@ function fakeLoader(): { load: () => Result; calls: () => number } {
         client: { level: 'debug' },
         mode: 'test',
         root: '/app',
+        dirs: ['/app'],
         files: [],
       }
     },
