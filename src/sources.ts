@@ -13,7 +13,13 @@ export function file<T>(path: string, schema: StandardSchemaV1<unknown, T>): Sou
 
 /** True for a leaf made by `env` or `file`, false for a nested section. */
 export function isSource(value: Source | Section): value is Source {
-  return 'schema' in value && typeof value.kind === 'string'
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'kind' in value &&
+    'schema' in value &&
+    '~standard' in value.schema
+  )
 }
 
 /** Every source in a section, depth first, with its dotted key. */
