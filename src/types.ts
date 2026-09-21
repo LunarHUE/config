@@ -48,6 +48,11 @@ export interface LoadResult<S extends Section = Section, C extends Section = Sec
   dirs: string[]
   /** Every file the loader read, in load order. */
   files: string[]
+  /**
+   * Env keys the loader set in process.env because no value was present. A
+   * reload removes them first so a changed or deleted file value is picked up.
+   */
+  envWritten: string[]
 }
 
 /** Env vars after merging every `.env` layer with `process.env`. */

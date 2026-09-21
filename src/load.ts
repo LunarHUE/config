@@ -31,7 +31,15 @@ export function loadConfig<S extends Section, C extends Section>(
     emptyStringAsUndefined: definition.emptyStringAsUndefined ?? true,
   })
 
-  return { server, client, mode, root, dirs, files: [...env.files, ...yaml.files] }
+  return {
+    server,
+    client,
+    mode,
+    root,
+    dirs,
+    files: [...env.files, ...yaml.files],
+    envWritten: env.written,
+  }
 }
 
 /**

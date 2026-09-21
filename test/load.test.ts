@@ -92,6 +92,22 @@ describe('loadConfig', () => {
     ])
   })
 
+  test('envWritten lists the keys the loader put into process.env', () => {
+    const KEY = envKey('LOAD_WRITTEN_KEY')
+    const PRESET = envKey('LOAD_WRITTEN_PRESET')
+    process.env[PRESET] = 'from-shell'
+    const root = tempRoot({ '.env': `${KEY}=a\n${PRESET}=from-file\n` })
+
+    const result = loadConfig({
+      root,
+      mode: 'test',
+      server: { key: env(KEY, z.string()), preset: env(PRESET, z.string()) },
+    })
+
+    expect(result.envWritten).toEqual([KEY])
+    expect(result.server.preset).toBe('from-shell')
+  })
+
   test('each layer overrides the one below it', () => {
     const root = tempRoot({
       'config.default.yml': 'fromDefault: default\nfromMode: default\n',

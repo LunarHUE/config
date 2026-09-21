@@ -140,6 +140,21 @@ describe('loadEnvLayers', () => {
     expect(result.env.PRESET).toBe('kept')
   })
 
+  test('written lists the keys it set and leaves out preset ones', () => {
+    const root = makeRoot({ '.env': 'FROM_FILE=yes\nALSO_FILE=yes\nPRESET=ignored\n' })
+    const env: EnvMap = { PRESET: 'kept' }
+    const result = loadEnvLayers([root], 'test', env)
+
+    expect(result.written.sort()).toEqual(['ALSO_FILE', 'FROM_FILE'])
+    expect(env.PRESET).toBe('kept')
+  })
+
+  test('written is empty when no file exists', () => {
+    const result = loadEnvLayers([path.join(tmpdir(), 'lunarhue-no-such-dir')], 'test', {})
+
+    expect(result.written).toEqual([])
+  })
+
   test('files lists only the files that exist, in load order', () => {
     const root = makeRoot({ '.env': 'A=1\n', '.env.test': 'A=2\n' })
     const result = loadEnvLayers([root], 'test', {})

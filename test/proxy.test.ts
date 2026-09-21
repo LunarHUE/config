@@ -25,6 +25,7 @@ function fakeLoader(): { load: () => Result; calls: () => number } {
         root: '/app',
         dirs: ['/app'],
         files: [],
+        envWritten: [],
       }
     },
     calls: () => calls,

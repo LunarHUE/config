@@ -67,6 +67,8 @@ export interface EnvLayersResult {
   env: EnvMap
   /** Absolute paths of the files that existed and were read, in load order. */
   files: string[]
+  /** Keys this call set in `processEnv` because no value was present. */
+  written: string[]
 }
 
 /**
@@ -101,9 +103,12 @@ export function loadEnvLayers(
     }
   }
 
+  const written: string[] = []
   for (const [key, value] of Object.entries(merged)) {
-    if (!(key in processEnv)) processEnv[key] = value
+    if (key in processEnv) continue
+    processEnv[key] = value
+    written.push(key)
   }
 
-  return { env: processEnv, files }
+  return { env: processEnv, files, written }
 }
