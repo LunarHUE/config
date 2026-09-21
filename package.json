@@ -3,6 +3,26 @@
   "version": "0.0.0",
   "description": "Layered YAML and .env config with Standard Schema validation and a server/client split",
   "license": "MIT",
+  "author": "Tristen Dillon",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tristendillon/config.git"
+  },
+  "homepage": "https://github.com/tristendillon/config#readme",
+  "bugs": {
+    "url": "https://github.com/tristendillon/config/issues"
+  },
+  "keywords": [
+    "config",
+    "env",
+    "dotenv",
+    "yaml",
+    "standard-schema",
+    "zod",
+    "valibot",
+    "arktype",
+    "vite"
+  ],
   "type": "module",
   "sideEffects": false,
   "files": [
@@ -18,6 +38,9 @@
       "types": "./dist/vite.d.ts",
       "default": "./dist/vite.js"
     }
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "scripts": {
     "build": "tsdown",
