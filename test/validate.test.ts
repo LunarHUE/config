@@ -1,10 +1,10 @@
 import { type } from 'arktype'
-import { describe, expect, test } from 'vitest'
+import { describe, expect, expectTypeOf, test } from 'vitest'
 import * as v from 'valibot'
 import { z } from 'zod'
 import { ConfigError } from '../src/errors'
 import { env, file } from '../src/sources'
-import type { ConfigDefinition } from '../src/types'
+import type { ConfigDefinition, InferSection } from '../src/types'
 import { validate } from '../src/validate'
 
 const defaults = { emptyStringAsUndefined: true }
@@ -17,6 +17,41 @@ function expectConfigError(run: () => unknown): ConfigError {
     throw error
   }
   throw new Error('expected a ConfigError')
+}
+
+/** The shape the README documents: file and env leaves next to three groups. */
+const server = {
+  port: file('api.port', z.number().int().min(1).max(65535)),
+  appOrigin: file('app.url', z.url()),
+  database: {
+    url: env('DATABASE_URL', z.url()),
+    poolMax: env('DATABASE_POOL_MAX', z.coerce.number().int().positive().optional()),
+  },
+  clerk: {
+    secretKey: env('CLERK_SECRET_KEY', z.string().min(1)),
+    publishableKey: env('CLERK_PUBLISHABLE_KEY', z.string().min(1)),
+    webhookSigningSecret: env('CLERK_WEBHOOK_SIGNING_SECRET', z.string().optional()),
+  },
+  telemetry: {
+    exporterEndpoint: env('OTEL_EXPORTER_OTLP_ENDPOINT', z.url().optional()),
+    serviceName: file('telemetry.api.serviceName', z.string().min(1)),
+  },
+  logLevel: file('logging.level', z.enum(['debug', 'info', 'warn', 'error'])),
+}
+
+const serverEnv = {
+  DATABASE_URL: 'postgres://localhost/app',
+  DATABASE_POOL_MAX: '20',
+  CLERK_SECRET_KEY: 'sk_test',
+  CLERK_PUBLISHABLE_KEY: 'pk_test',
+  OTEL_EXPORTER_OTLP_ENDPOINT: 'http://collector:4318',
+}
+
+const serverYaml = {
+  api: { port: 3000 },
+  app: { url: 'https://app.example.com' },
+  telemetry: { api: { serviceName: 'api' } },
+  logging: { level: 'info' },
 }
 
 describe('validate', () => {
@@ -192,6 +227,66 @@ describe('validate', () => {
     })
   })
 
+  test('a definition with several groups returns the same nesting', () => {
+    const result = validate({ server }, serverEnv, serverYaml, defaults)
+
+    expect(result.server).toEqual({
+      port: 3000,
+      appOrigin: 'https://app.example.com',
+      database: { url: 'postgres://localhost/app', poolMax: 20 },
+      clerk: {
+        secretKey: 'sk_test',
+        publishableKey: 'pk_test',
+        webhookSigningSecret: undefined,
+      },
+      telemetry: {
+        exporterEndpoint: 'http://collector:4318',
+        serviceName: 'api',
+      },
+      logLevel: 'info',
+    })
+    expect(result.server.database.poolMax).toBe(20)
+  })
+
+  test('a failure inside a group names the group in the key and the message', () => {
+    const error = expectConfigError(() =>
+      validate({ server }, { ...serverEnv, DATABASE_URL: 'not-a-url' }, serverYaml, defaults),
+    )
+
+    expect(error.issues).toHaveLength(1)
+    expect(error.issues[0]).toMatchObject({
+      section: 'server',
+      key: 'database.url',
+      source: 'env',
+      path: 'DATABASE_URL',
+    })
+    expect(error.message).toContain('server.database.url  (env DATABASE_URL)  Invalid URL')
+  })
+
+  test('a nested schema path appends after the group key', () => {
+    const error = expectConfigError(() =>
+      validate(
+        { client: { auth: { settings: file('auth', z.object({ signInPath: z.string() })) } } },
+        {},
+        { auth: {} },
+        defaults,
+      ),
+    )
+
+    expect(error.issues).toHaveLength(1)
+    expect(error.issues[0]).toMatchObject({
+      section: 'client',
+      key: 'auth.settings.signInPath',
+      source: 'file',
+      path: 'auth.signInPath',
+    })
+  })
+
+  test('an empty group is an empty object', () => {
+    const result = validate({ server: { flags: {} } }, {}, {}, defaults)
+    expect(result.server.flags).toEqual({})
+  })
+
   test('a missing section is treated as empty', () => {
     const result = validate({}, {}, {}, defaults)
     expect(result.server).toEqual({})
@@ -215,6 +310,16 @@ describe('validate', () => {
         defaults,
       ),
     ).toThrow(/Async schemas are not supported.*server\.slow/)
+  })
+})
+
+describe('InferSection', () => {
+  test('a group becomes a nested object type', () => {
+    type Server = InferSection<typeof server>
+
+    expectTypeOf<Server['database']>().toEqualTypeOf<{ url: string; poolMax: number | undefined }>()
+    expectTypeOf<Server['clerk']['webhookSigningSecret']>().toEqualTypeOf<string | undefined>()
+    expectTypeOf<Server['logLevel']>().toEqualTypeOf<'debug' | 'info' | 'warn' | 'error'>()
   })
 })
 
