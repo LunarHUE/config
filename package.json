@@ -1,6 +1,6 @@
 {
   "name": "@lunarhue/config",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Layered YAML and .env config with Standard Schema validation and a server/client split",
   "license": "MIT",
   "author": "Tristen Dillon",
