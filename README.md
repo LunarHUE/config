@@ -148,6 +148,7 @@ result.mode // 'development'
 result.root // '/home/you/repo'
 result.dirs // ['/home/you/repo'], or [root, dir] when `dir` is set
 result.files // every file that existed and was read, in load order
+result.envWritten // env keys the loader set in process.env because no value was present
 ```
 
 Use it when you want `mode`, `root`, `dirs` or `files`, for example to log what got loaded.
@@ -169,7 +170,7 @@ Declares a value read from the merged YAML by dotted path, for example `logging.
 
 ### Types
 
-- `Config<S, C>`: what `defineConfig` returns. Has `server` and `client` getters.
+- `Config<S, C>`: what `defineConfig` returns. Has `server` and `client` getters and a `reload` method.
 - `InferConfig<T>`: the `{ server, client }` value types from a `Config`. Useful for passing config into a function.
 - `ConfigIssue`: `{ section, key, source, path, message }`.
 - Also exported: `ConfigDefinition`, `ConfigOptions`, `InferSection`, `LoadResult`, `Source`.
@@ -222,7 +223,7 @@ export default defineConfig({
 })
 ```
 
-The plugin calls `loadConfig` once during config resolution and adds a `define` for `globalThis.__APP_CONFIG__` holding the client section only. Values are baked in at build time, so changing a YAML file while the dev server is running needs a restart.
+The plugin calls `loadConfig` once during config resolution and adds a `define` for `globalThis.__APP_CONFIG__` holding the client section only. Values are baked in at build time. In dev the plugin watches the layers and restarts the server when one changes, so the new values end up in the bundle. Pass `appConfig(config, { watch: false })` to turn that off.
 
 Without Vite, render the script from your server:
 
@@ -240,6 +241,55 @@ const html = `<!doctype html>
 ```
 
 `serializeClient` returns JavaScript that assigns the client section to the global. It escapes `</script>` so a config value cannot close the tag. Put it before the bundle that reads the config.
+
+## Reloading
+
+A loaded config is cached for the process. `config.reload()` throws the cache away, so the next read of `config.server` or `config.client` reads the files and validates again:
+
+```ts
+import { config } from './config'
+
+config.reload()
+config.server.databaseUrl // read from disk again
+```
+
+Reloading also removes the env keys the loader itself put into `process.env`, so a value that changed or disappeared from a `.env` file is picked up instead of being pinned by the first load. A key your shell exported, or one your own code assigned after the load, is left alone.
+
+`watchConfig` does the reloading for you. It watches every directory the config reads from and reloads when a layer file changes:
+
+```ts
+import { watchConfig } from '@lunarhue/config'
+import { config } from './config'
+
+const stop = watchConfig(config, {
+  onChange: (file) => console.log(`config reloaded after ${file}`),
+  onError: (error) => console.error(error),
+})
+
+process.on('SIGTERM', stop)
+```
+
+It loads the config first, if it has not loaded yet, to learn which directories to watch. Events are debounced (50ms by default, set `debounce` to change it), and the reload happens right away so `onError` sees a validation failure at the moment of the change. Without `onError` the error stays quiet until the next read, which throws as usual. The watchers do not keep the process alive, and the returned function closes them.
+
+With Vite, the plugin already restarts the dev server on a layer change. Use `watchConfig` for a long-running server process, a worker, or anything else outside Vite.
+
+`watchConfig` is server only; the browser entry does not export it. `reload()` exists there and does nothing, since the client values come from a global the page already has.
+
+One caveat. A value copied out of the config when a module first runs will not update:
+
+```ts
+const url = config.server.databaseUrl // read once, stale after a reload
+```
+
+Read through the config at the point of use instead, and take a fresh value each time:
+
+```ts
+function connect() {
+  return createClient(config.server.databaseUrl)
+}
+```
+
+Connections, servers and clients built from a config value need rebuilding yourself. Reloading only refreshes what the config hands out.
 
 ## Scripts
 
@@ -321,6 +371,5 @@ You can mix validators across keys in one definition. Issues are collected the s
 
 - No rc-file discovery. The file names are fixed.
 - No `extends` and no remote config sources.
-- No hot reload. Config loads once per process.
 - No `${VAR}` interpolation in `.env` or YAML values.
 - No writing config. The library only reads.
