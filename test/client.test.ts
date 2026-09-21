@@ -36,6 +36,14 @@ function withoutGlobal(body: () => void): void {
 }
 
 describe('client config', () => {
+  test('reload does nothing and the client still reads the global', () => {
+    withGlobal({ appName: 'shop', apiUrl: 'https://api.example.com' }, () => {
+      const config = defineConfig(definition)
+      config.reload()
+      expect(config.client.appName).toBe('shop')
+    })
+  })
+
   test('client reads the global', () => {
     withGlobal({ appName: 'shop', apiUrl: 'https://api.example.com' }, () => {
       const config = defineConfig(definition)

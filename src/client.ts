@@ -12,6 +12,8 @@ export interface ClientConfig<S extends Section, C extends Section> {
   /** Typed like the server half so shared modules compile, but every read throws. */
   readonly server: InferSection<S>
   readonly client: InferSection<C>
+  /** There is no cache to drop in the browser. Present so shared code can call it. */
+  readonly reload: () => void
 }
 
 /**
@@ -29,6 +31,7 @@ export function defineConfig<S extends Section, C extends Section>(
     get client() {
       return readGlobal<C>()
     },
+    reload: () => {},
   }
 }
 
