@@ -73,23 +73,36 @@ console.log(config.client.appName, config.client.logLevel)
 
 **Root discovery.** The loader walks up from `process.cwd()` and stops at the first directory containing `config.default.yml`. That directory is the root, and every YAML and `.env` file is resolved against it. A script in `packages/db` gets the same config as the app at the root. If no marker is found and any declared key uses `file()`, the loader throws `RootNotFoundError`. If every key uses `env()`, it falls back to the cwd.
 
+**Per-package layers.** Pass `dir` and the package's own files load after the root's, so an app or package can override shared values. Discovery then starts at the parent of `dir`, which keeps a `config.default.yml` inside the package from being taken for the repo root. If `dir` holds the only marker, `dir` is the root and there is one layer set, not two. See [Per-package layers](#per-package-layers).
+
 **Mode.** `APP_ENV`, then `NODE_ENV`, then `development`. An empty or whitespace-only value counts as unset and falls through. The `mode` option overrides all three.
 
-**Env precedence**, lowest first:
+**Env precedence**, lowest first. Without `dir`, only the root block applies:
 
-1. `.env`
-2. `.env.local`
-3. `.env.<mode>`
-4. `.env.<mode>.local`
-5. `process.env`
+1. root `.env`
+2. root `.env.local`
+3. root `.env.<mode>`
+4. root `.env.<mode>.local`
+5. `dir/.env`
+6. `dir/.env.local`
+7. `dir/.env.<mode>`
+8. `dir/.env.<mode>.local`
+9. `process.env`
+
+Closer wins. Every file in `dir` beats every file at the root, so `dir/.env` overrides the root's `.env.<mode>.local`.
 
 A variable already present in `process.env` beats every file, so a value exported by your shell or injected by CI always wins. After merging, the loader writes file values into `process.env` for keys it does not already have. SDKs that read `process.env.AWS_REGION` directly see them without any extra wiring.
 
-**YAML precedence**, lowest first:
+**YAML precedence**, lowest first. Without `dir`, only the root block applies:
 
-1. `config.default.yml`
-2. `config.<mode>.yml`
-3. `config.local.yml`
+1. root `config.default.yml`
+2. root `config.<mode>.yml`
+3. root `config.local.yml`
+4. `dir/config.default.yml`
+5. `dir/config.<mode>.yml`
+6. `dir/config.local.yml`
+
+Closer wins here too. `dir/config.default.yml` overrides the root's `config.local.yml`.
 
 Merge rules:
 
@@ -114,7 +127,7 @@ Parsing uses the YAML core schema, so `yes`, `no`, `on`, `off` and dates stay st
 
 ### `defineConfig(definition)`
 
-Takes `{ server?, client?, root?, mode?, emptyStringAsUndefined? }` and returns a lazy `Config`. Both sections are optional. Key names are yours; the `env()` name or `file()` path is what maps to a source.
+Takes `{ server?, client?, root?, dir?, mode?, emptyStringAsUndefined? }` and returns a lazy `Config`. Both sections are optional. Key names are yours; the `env()` name or `file()` path is what maps to a source.
 
 ### `loadConfig(definition)`
 
@@ -133,10 +146,11 @@ result.server.databaseUrl // string
 result.client.appName // string
 result.mode // 'development'
 result.root // '/home/you/repo'
+result.dirs // ['/home/you/repo'], or [root, dir] when `dir` is set
 result.files // every file that existed and was read, in load order
 ```
 
-Use it when you want `mode`, `root` or `files`, for example to log what got loaded.
+Use it when you want `mode`, `root`, `dirs` or `files`, for example to log what got loaded.
 
 ### `env(name, schema)`
 
@@ -149,6 +163,7 @@ Declares a value read from the merged YAML by dotted path, for example `logging.
 ### Options
 
 - `root`: skip discovery and use this directory. Relative paths resolve against the cwd.
+- `dir`: directory of the package that owns this definition, usually `import.meta.dirname`. Its config and `.env` files load after the root's. Relative paths resolve against the cwd.
 - `mode`: override `APP_ENV` and `NODE_ENV`.
 - `emptyStringAsUndefined`: default `true`. An env var set to `""` becomes `undefined` before validation, so `.default()` and `.optional()` behave the way you expect. Empty values read from YAML are left alone.
 
@@ -243,6 +258,36 @@ export default defineConfig({
 ```
 
 Running `bunx drizzle-kit push` from `packages/db` finds the root, loads `.env` and `.env.local` from there, and validates `DATABASE_URL` with the same schema the app uses.
+
+## Per-package layers
+
+In a monorepo the root holds the config every package shares, and each app or package keeps the parts only it cares about. Pass `dir` to say which package a definition belongs to:
+
+```ts
+// apps/api/config.ts
+import { defineConfig, env, file } from '@lunarhue/config'
+import { z } from 'zod'
+
+export const config = defineConfig({
+  dir: import.meta.dirname,
+  server: { databaseUrl: env('DATABASE_URL', z.url()) },
+  client: { appName: file('app.name', z.string()) },
+})
+```
+
+With a tree like this:
+
+```
+config.default.yml            app.name: Acme, app.support: help@acme.test
+.env                          DATABASE_URL, SENTRY_DSN
+apps/api/config.default.yml   app.name: Acme API
+apps/api/.env                 DATABASE_URL
+packages/db/.env              DATABASE_URL
+```
+
+`apps/api` gets its own `app.name` and `DATABASE_URL`, still sees `app.support` and `SENTRY_DSN` from the root, and never sees the URL that `packages/db` uses. Nothing depends on the cwd, so the same values come back whether you run from the repo root or from inside the package.
+
+`import.meta.dirname` needs an ESM module on Node 22+ or Bun. In CommonJS use `__dirname`. Anywhere else, pass an absolute path.
 
 ## Using other validators
 
