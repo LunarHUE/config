@@ -3,10 +3,14 @@ import type { ConfigDefinition, EnvMap, InferSection, LoadResult, Section } from
 /** Key that carries the definition back out of a `Config`, for the Vite plugin. */
 export const DEFINITION: unique symbol = Symbol.for('@lunarhue/config.definition')
 
+/** Key that hands the cached `LoadResult` to `watchConfig`. Undefined before the first load. */
+export const RESULT: unique symbol = Symbol.for('@lunarhue/config.result')
+
 export interface Config<S extends Section = Section, C extends Section = Section> {
   readonly server: InferSection<S>
   readonly client: InferSection<C>
   readonly [DEFINITION]: ConfigDefinition<S, C>
+  readonly [RESULT]: LoadResult<S, C> | undefined
   /** Drop the cached result so the next read of `server` or `client` loads again. */
   readonly reload: () => void
 }
@@ -60,6 +64,9 @@ export function createLazyConfig<S extends Section, C extends Section>(
     },
     get [DEFINITION]() {
       return definition
+    },
+    get [RESULT]() {
+      return result
     },
     reload,
   }

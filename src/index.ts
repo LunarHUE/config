@@ -5,9 +5,11 @@ import type { ConfigDefinition, Section } from './types'
 export { loadConfig } from './load'
 export { env, file } from './sources'
 export { BoundaryError, ConfigError, RootNotFoundError } from './errors'
-export { DEFINITION } from './proxy'
+export { DEFINITION, RESULT } from './proxy'
+export { watchConfig } from './watch'
 export type { Config, InferConfig } from './proxy'
 export type { ConfigIssue } from './errors'
+export type { WatchOptions } from './watch'
 export type { ConfigDefinition, ConfigOptions, InferSection, LoadResult, Source } from './types'
 
 /** Declare the config. Nothing is read until `server` or `client` is first accessed. */
