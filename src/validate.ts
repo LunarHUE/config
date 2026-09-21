@@ -1,6 +1,7 @@
 import type { StandardSchemaV1 } from '@standard-schema/spec'
 import { ConfigError, type ConfigIssue } from './errors'
 import { getPath } from './merge'
+import { isSource } from './sources'
 import type { ConfigDefinition, EnvMap, InferSection, Section, Source, YamlValue } from './types'
 
 export interface ValidateOptions {
@@ -35,11 +36,18 @@ function validateSection(
   yaml: { [key: string]: YamlValue },
   options: ValidateOptions,
   issues: ConfigIssue[],
+  prefix = '',
 ): Record<string, unknown> {
   const out: Record<string, unknown> = {}
   if (!keys) return out
 
-  for (const [key, source] of Object.entries(keys)) {
+  for (const [name, source] of Object.entries(keys)) {
+    const key = prefix + name
+    if (!isSource(source)) {
+      out[name] = validateSection(section, source, env, yaml, options, issues, key + '.')
+      continue
+    }
+
     const result = runSchema(section, key, source, pick(source, env, yaml, options))
 
     if (result.issues) {
@@ -56,7 +64,7 @@ function validateSection(
       continue
     }
 
-    out[key] = result.value
+    out[name] = result.value
   }
 
   return out

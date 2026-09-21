@@ -144,6 +144,22 @@ describe('loadConfig', () => {
     }
   })
 
+  test('a file key inside a nested section also requires a root', () => {
+    const dir = tempRoot()
+    const before = process.cwd()
+    try {
+      process.chdir(dir)
+      expect(() =>
+        loadConfig({
+          mode: 'test',
+          client: { logging: { level: file('logging.level', z.string()) } },
+        }),
+      ).toThrow(RootNotFoundError)
+    } finally {
+      process.chdir(before)
+    }
+  })
+
   test('an env-only definition works without a root', () => {
     const KEY = envKey('LOAD_NO_ROOT_KEY')
     const dir = tempRoot({ '.env': `${KEY}=from-file\n` })

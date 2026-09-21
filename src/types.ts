@@ -10,7 +10,8 @@ export interface Source<T = unknown> {
   readonly schema: StandardSchemaV1<unknown, T>
 }
 
-export type Section = Record<string, Source>
+/** Sources keyed by name. A value may be another section, which nests the result. */
+export type Section = { [key: string]: Source | Section }
 
 export interface ConfigOptions {
   /** Skip root discovery and use this directory. */
@@ -36,7 +37,7 @@ export interface ConfigDefinition<
 }
 
 export type InferSection<S extends Section> = {
-  [K in keyof S]: S[K] extends Source<infer T> ? T : never
+  [K in keyof S]: S[K] extends Source<infer T> ? T : S[K] extends Section ? InferSection<S[K]> : never
 }
 
 export interface LoadResult<S extends Section = Section, C extends Section = Section> {

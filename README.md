@@ -161,6 +161,25 @@ Declares a value read from the merged env layers by variable name.
 
 Declares a value read from the merged YAML by dotted path, for example `logging.level`. The path may point at an object, and the schema validates the whole subtree.
 
+### Groups
+
+A key may hold another object of sources instead of a single `env()` or `file()`. The result nests the same way, and env and file sources can sit side by side in one group:
+
+```ts
+export const config = defineConfig({
+  server: {
+    telemetry: {
+      exporterEndpoint: env('OTEL_EXPORTER_OTLP_ENDPOINT', z.url().optional()),
+      serviceName: file('telemetry.api.serviceName', z.string().min(1)),
+    },
+  },
+})
+
+config.server.telemetry.serviceName // string
+```
+
+Use `file()` with an object schema when every value in the group comes from one YAML subtree. Use a group when the values come from different places.
+
 ### Options
 
 - `root`: skip discovery and use this directory. Relative paths resolve against the cwd.
@@ -195,6 +214,8 @@ Invalid config
   server.databaseUrl  (env DATABASE_URL)    Invalid URL
   client.logLevel     (file logging.level)  Invalid option: expected one of "debug"|"info"|"warn"|"error"
 ```
+
+Keys inside a nested group are reported with the dotted key, so a bad `OTEL_EXPORTER_OTLP_ENDPOINT` declared under `telemetry` reports `server.telemetry.exporterEndpoint  (env OTEL_EXPORTER_OTLP_ENDPOINT)`.
 
 Nested schema failures append the inner path to both the key and the source path, so an object at `auth` missing `signInPath` reports `client.auth.signInPath  (file auth.signInPath)`.
 

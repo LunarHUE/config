@@ -151,6 +151,47 @@ describe('validate', () => {
     expect(result.client.auth).toEqual({ signInPath: '/sign-in' })
   })
 
+  test('a nested section mixes env and file sources under one key', () => {
+    const result = validate(
+      {
+        server: {
+          telemetry: {
+            endpoint: env('OTEL_ENDPOINT', z.string().optional()),
+            serviceName: file('telemetry.serviceName', z.string()),
+          },
+        },
+      },
+      { OTEL_ENDPOINT: 'http://collector:4318' },
+      { telemetry: { serviceName: 'api' } },
+      defaults,
+    )
+
+    expect(result.server.telemetry).toEqual({
+      endpoint: 'http://collector:4318',
+      serviceName: 'api',
+    })
+    expect(result.server.telemetry.serviceName).toBe('api')
+  })
+
+  test('a failure inside a nested section reports the dotted key', () => {
+    const error = expectConfigError(() =>
+      validate(
+        { server: { database: { pool: { max: env('POOL_MAX', z.string()) } } } },
+        {},
+        {},
+        defaults,
+      ),
+    )
+
+    expect(error.issues).toHaveLength(1)
+    expect(error.issues[0]).toMatchObject({
+      section: 'server',
+      key: 'database.pool.max',
+      source: 'env',
+      path: 'POOL_MAX',
+    })
+  })
+
   test('a missing section is treated as empty', () => {
     const result = validate({}, {}, {}, defaults)
     expect(result.server).toEqual({})

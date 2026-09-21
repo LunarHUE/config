@@ -4,6 +4,7 @@ import { loadEnvLayers } from './dotenv'
 import { RootNotFoundError } from './errors'
 import { resolveMode } from './mode'
 import { findRoot, hasRootMarker } from './root'
+import { sources } from './sources'
 import type { ConfigDefinition, LoadResult, Section, YamlValue } from './types'
 import { validate } from './validate'
 import { loadYamlLayers } from './yaml'
@@ -59,9 +60,8 @@ function findConfigRoot(
 
 /** True when any declared key reads from a YAML file, which makes the root mandatory. */
 function needsYaml(definition: ConfigDefinition): boolean {
-  const sources = [
-    ...Object.values(definition.server ?? {}),
-    ...Object.values(definition.client ?? {}),
-  ]
-  return sources.some((source) => source.kind === 'file')
+  for (const section of [definition.server, definition.client]) {
+    for (const [, source] of sources(section ?? {})) if (source.kind === 'file') return true
+  }
+  return false
 }
