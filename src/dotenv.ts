@@ -70,30 +70,35 @@ export interface EnvLayersResult {
 }
 
 /**
- * Read every .env layer under `root`, merge them (later file wins), then apply
- * `processEnv` on top. Writes file values into `processEnv` for keys it does
- * not already have, so code that reads process.env directly sees them.
+ * Read the .env layers in every directory of `dirs`, merge them (later file
+ * wins), then apply `processEnv` on top. `dirs` runs lowest precedence first,
+ * so a file in a later directory beats every file in an earlier one. Writes
+ * file values into `processEnv` for keys it does not already have, so code
+ * that reads process.env directly sees them.
  *
  * The returned `env` is the `processEnv` object itself, after that mutation.
  */
 export function loadEnvLayers(
-  root: string,
+  dirs: string[],
   mode: string,
   processEnv: EnvMap = process.env,
 ): EnvLayersResult {
   const files: string[] = []
   const merged: Record<string, string> = {}
+  const names = envLayerFiles(mode)
 
-  for (const name of envLayerFiles(mode)) {
-    const file = path.resolve(root, name)
-    let text: string
-    try {
-      text = fs.readFileSync(file, 'utf8')
-    } catch {
-      continue
+  for (const dir of dirs) {
+    for (const name of names) {
+      const file = path.resolve(dir, name)
+      let text: string
+      try {
+        text = fs.readFileSync(file, 'utf8')
+      } catch {
+        continue
+      }
+      files.push(file)
+      Object.assign(merged, parseDotenv(text))
     }
-    files.push(file)
-    Object.assign(merged, parseDotenv(text))
   }
 
   for (const [key, value] of Object.entries(merged)) {

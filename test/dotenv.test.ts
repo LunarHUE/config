@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 
@@ -87,6 +87,14 @@ describe('loadEnvLayers', () => {
     return root
   }
 
+  /** A subdirectory of `root` holding its own .env layers. */
+  function makeSub(root: string, name: string, files: Record<string, string>): string {
+    const dir = path.join(root, name)
+    mkdirSync(dir, { recursive: true })
+    for (const [file, text] of Object.entries(files)) writeFileSync(path.join(dir, file), text)
+    return dir
+  }
+
   afterAll(() => {
     for (const root of roots) rmSync(root, { recursive: true, force: true })
   })
@@ -99,7 +107,7 @@ describe('loadEnvLayers', () => {
       '.env.test.local': 'LEVEL=modelocal\nD=modelocal\n',
     })
     const env: EnvMap = {}
-    const result = loadEnvLayers(root, 'test', env)
+    const result = loadEnvLayers([root], 'test', env)
 
     expect(result.env.LEVEL).toBe('modelocal')
     expect(result.env.A).toBe('env')
@@ -115,7 +123,7 @@ describe('loadEnvLayers', () => {
       '.env.test.local': 'TOKEN=from-mode-local\n',
     })
     const env: EnvMap = { TOKEN: 'from-ci' }
-    const result = loadEnvLayers(root, 'test', env)
+    const result = loadEnvLayers([root], 'test', env)
 
     expect(result.env.TOKEN).toBe('from-ci')
     expect(env.TOKEN).toBe('from-ci')
@@ -124,7 +132,7 @@ describe('loadEnvLayers', () => {
   test('writes file-only keys into the passed processEnv and returns that object', () => {
     const root = makeRoot({ '.env': 'ONLY_IN_FILE=yes\nBLANK=\n' })
     const env: EnvMap = { PRESET: 'kept' }
-    const result = loadEnvLayers(root, 'test', env)
+    const result = loadEnvLayers([root], 'test', env)
 
     expect(env.ONLY_IN_FILE).toBe('yes')
     expect(env.BLANK).toBe('')
@@ -134,16 +142,48 @@ describe('loadEnvLayers', () => {
 
   test('files lists only the files that exist, in load order', () => {
     const root = makeRoot({ '.env': 'A=1\n', '.env.test': 'A=2\n' })
-    const result = loadEnvLayers(root, 'test', {})
+    const result = loadEnvLayers([root], 'test', {})
 
     expect(result.files).toEqual([path.join(root, '.env'), path.join(root, '.env.test')])
   })
 
   test('a missing root returns just processEnv and no files', () => {
     const env: EnvMap = { KEEP: 'yes' }
-    const result = loadEnvLayers(path.join(tmpdir(), 'lunarhue-no-such-dir'), 'test', env)
+    const result = loadEnvLayers([path.join(tmpdir(), 'lunarhue-no-such-dir')], 'test', env)
 
     expect(result.files).toEqual([])
     expect(result.env).toEqual({ KEEP: 'yes' })
+  })
+
+  test('a later directory wins and keys only in the first survive', () => {
+    const root = makeRoot({ '.env': 'SHARED=root\nROOT_ONLY=root\n' })
+    const pkg = makeSub(root, 'apps/api', { '.env': 'SHARED=pkg\nPKG_ONLY=pkg\n' })
+    const env: EnvMap = {}
+    const result = loadEnvLayers([root, pkg], 'test', env)
+
+    expect(result.env.SHARED).toBe('pkg')
+    expect(result.env.ROOT_ONLY).toBe('root')
+    expect(result.env.PKG_ONLY).toBe('pkg')
+  })
+
+  test('.env in a later directory beats .env.local in an earlier one', () => {
+    const root = makeRoot({ '.env': 'TOKEN=root\n', '.env.local': 'TOKEN=root-local\n' })
+    const pkg = makeSub(root, 'apps/api', { '.env': 'TOKEN=pkg\n' })
+    const result = loadEnvLayers([root, pkg], 'test', {})
+
+    expect(result.env.TOKEN).toBe('pkg')
+  })
+
+  test('files lists every directory in order, all layers of one before the next', () => {
+    const root = makeRoot({ '.env': 'A=1\n', '.env.test': 'A=2\n' })
+    const pkg = makeSub(root, 'apps/api', { '.env': 'A=3\n', '.env.test.local': 'A=4\n' })
+    const result = loadEnvLayers([root, pkg], 'test', {})
+
+    expect(result.files).toEqual([
+      path.join(root, '.env'),
+      path.join(root, '.env.test'),
+      path.join(pkg, '.env'),
+      path.join(pkg, '.env.test.local'),
+    ])
   })
 })

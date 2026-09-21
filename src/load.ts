@@ -19,7 +19,7 @@ export function loadConfig<S extends Section, C extends Section>(
   if (found === undefined && needsYaml(definition)) throw new RootNotFoundError(cwd)
 
   const root = found ?? cwd
-  const env = loadEnvLayers(root, mode)
+  const env = loadEnvLayers([root], mode)
   const yaml =
     found === undefined
       ? { data: {} as { [key: string]: YamlValue }, files: [] as string[] }
