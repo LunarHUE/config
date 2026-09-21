@@ -23,6 +23,7 @@ function makeRepo(): { root: string; pkg: string } {
   fs.writeFileSync(path.join(root, '.env'), `${DB}=postgres://localhost/app\n`)
   const pkg = path.join(root, 'packages', 'db')
   fs.mkdirSync(pkg, { recursive: true })
+  fs.writeFileSync(path.join(pkg, '.env'), `${DB}=postgres://localhost/db-package\n`)
   return { root, pkg }
 }
 
@@ -40,4 +41,14 @@ test('a script in a nested package reads config from the repo root', () => {
   } finally {
     process.chdir(before)
   }
+})
+
+test('passing dir applies the package .env on top of the root one', () => {
+  const { root, pkg } = makeRepo()
+
+  const result = loadConfig({ dir: pkg, server: { databaseUrl: env(DB, z.url()) } })
+
+  expect(result.root).toBe(root)
+  expect(result.dirs).toEqual([root, pkg])
+  expect(result.server.databaseUrl).toBe('postgres://localhost/db-package')
 })
