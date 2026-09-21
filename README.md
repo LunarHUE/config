@@ -47,7 +47,10 @@ import { z } from 'zod'
 
 export const config = defineConfig({
   server: {
-    databaseUrl: env('DATABASE_URL', z.url()),
+    database: {
+      url: env('DATABASE_URL', z.url()),
+      poolMax: env('DATABASE_POOL_MAX', z.coerce.number().int().positive().optional()),
+    },
     sessionSecret: env('SESSION_SECRET', z.string().min(32)),
   },
   client: {
@@ -63,7 +66,7 @@ Read it anywhere:
 ```ts
 import { config } from './config'
 
-const db = connect(config.server.databaseUrl)
+const db = connect(config.server.database.url, { max: config.server.database.poolMax })
 console.log(config.client.appName, config.client.logLevel)
 ```
 
@@ -127,7 +130,7 @@ Parsing uses the YAML core schema, so `yes`, `no`, `on`, `off` and dates stay st
 
 ### `defineConfig(definition)`
 
-Takes `{ server?, client?, root?, dir?, mode?, emptyStringAsUndefined? }` and returns a lazy `Config`. Both sections are optional. Key names are yours; the `env()` name or `file()` path is what maps to a source.
+Takes `{ server?, client?, root?, dir?, mode?, emptyStringAsUndefined? }` and returns a lazy `Config`. Both sections are optional. Key names are yours; the `env()` name or `file()` path is what maps to a source. A key may hold a group of sources instead of one source, and groups nest to any depth; nesting changes only the shape of the result and the dotted key an issue reports.
 
 ### `loadConfig(definition)`
 
@@ -271,7 +274,7 @@ A loaded config is cached for the process. `config.reload()` throws the cache aw
 import { config } from './config'
 
 config.reload()
-config.server.databaseUrl // read from disk again
+config.server.database.url // read from disk again
 ```
 
 Reloading also removes the env keys the loader itself put into `process.env`, so a value that changed or disappeared from a `.env` file is picked up instead of being pinned by the first load. A key your shell exported, or one your own code assigned after the load, is left alone.
@@ -299,14 +302,14 @@ With Vite, the plugin already restarts the dev server on a layer change. Use `wa
 One caveat. A value copied out of the config when a module first runs will not update:
 
 ```ts
-const url = config.server.databaseUrl // read once, stale after a reload
+const url = config.server.database.url // read once, stale after a reload
 ```
 
 Read through the config at the point of use instead, and take a fresh value each time:
 
 ```ts
 function connect() {
-  return createClient(config.server.databaseUrl)
+  return createClient(config.server.database.url)
 }
 ```
 
@@ -324,7 +327,7 @@ import { config } from '../../src/config'
 export default defineConfig({
   schema: './src/schema.ts',
   dialect: 'postgresql',
-  dbCredentials: { url: config.server.databaseUrl },
+  dbCredentials: { url: config.server.database.url },
 })
 ```
 
