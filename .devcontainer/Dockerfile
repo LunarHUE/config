@@ -8,6 +8,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     curl \
     direnv \
+    gh \
     git \
     git-lfs \
     gnupg \
@@ -28,7 +29,7 @@ RUN curl --proto '=https' --tlsv1.2 -sSf -L \
     --no-confirm --init none --extra-conf "filter-syscalls = false" \
 && sed -i '/install\.determinate\.systems/d' /etc/nix/nix.conf
 
-ENV PATH="/nix/var/nix/profiles/default/bin:/root/.nix-profile/bin:${PATH}"
+ENV PATH="/nix/var/nix/profiles/default/bin:${PATH}"
 ENV NIX_CONFIG="experimental-features = nix-command flakes"
 
 WORKDIR /workspace
