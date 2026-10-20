@@ -5,7 +5,7 @@ import { RootNotFoundError } from './errors'
 import { resolveMode } from './mode'
 import { findRoot, hasRootMarker } from './root'
 import { sources } from './sources'
-import type { ConfigDefinition, LoadResult, Section, YamlValue } from './types'
+import type { ConfigDefinition, LoadResult, Section } from './types'
 import { validate } from './validate'
 import { loadYamlLayers } from './yaml'
 
@@ -13,20 +13,9 @@ import { loadYamlLayers } from './yaml'
 export function loadConfig<S extends Section, C extends Section>(
   definition: ConfigDefinition<S, C>,
 ): LoadResult<S, C> {
-  const mode = resolveMode(definition.mode)
-  const cwd = process.cwd()
-  const dir = definition.dir === undefined ? undefined : path.resolve(cwd, definition.dir)
-  const found = findConfigRoot(definition.root, dir, cwd)
-
-  if (found === undefined && needsYaml(definition)) throw new RootNotFoundError(dir ?? cwd)
-
-  const root = found ?? dir ?? cwd
-  const dirs = dir === undefined || dir === root ? [root] : [root, dir]
+  const { mode, root, dirs, found } = resolveLayers(definition)
   const env = loadEnvLayers(dirs)
-  const yaml =
-    found === undefined
-      ? { data: {} as { [key: string]: YamlValue }, files: [] as string[] }
-      : loadYamlLayers(dirs, mode)
+  const yaml = found ? loadYamlLayers(dirs, mode) : { data: {}, files: [] }
 
   const { server, client } = validate(definition, env.env, yaml.data, {
     emptyStringAsUndefined: definition.emptyStringAsUndefined ?? true,
@@ -42,6 +31,32 @@ export function loadConfig<S extends Section, C extends Section>(
     files: [...env.files, ...yaml.files],
     envWritten: env.written,
   }
+}
+
+export interface Layers {
+  mode: string
+  root: string
+  /** Lowest precedence first: the root, then `dir` when it is a different directory. */
+  dirs: string[]
+  /** False when no root marker exists and the definition needs none. */
+  found: boolean
+}
+
+/**
+ * Work out the mode and the directories the layers come from. Shared by the
+ * loader and the baker so both read the same files.
+ */
+export function resolveLayers(definition: ConfigDefinition): Layers {
+  const mode = resolveMode(definition.mode)
+  const cwd = process.cwd()
+  const dir = definition.dir === undefined ? undefined : path.resolve(cwd, definition.dir)
+  const found = findConfigRoot(definition.root, dir, cwd)
+
+  if (found === undefined && needsYaml(definition)) throw new RootNotFoundError(dir ?? cwd)
+
+  const root = found ?? dir ?? cwd
+  const dirs = dir === undefined || dir === root ? [root] : [root, dir]
+  return { mode, root, dirs, found: found !== undefined }
 }
 
 /**

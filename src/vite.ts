@@ -2,14 +2,18 @@ import path from 'node:path'
 
 import type { Plugin } from 'vite'
 
+import { bakeYaml } from './bake'
 import { envLayerFiles } from './dotenv'
 import { loadConfig } from './load'
 import { type Config, DEFINITION } from './proxy'
-import type { ConfigDefinition, LoadResult, Section } from './types'
+import type { ConfigDefinition, LoadResult, Section, YamlObject } from './types'
 import { yamlLayerFiles } from './yaml'
 
 /** Name of the global the browser half reads. Kept in step with the one in client.ts. */
 export const APP_CONFIG_GLOBAL = '__APP_CONFIG__'
+
+/** Name of the global the worker half reads. Kept in step with the one in baked.ts. */
+export const APP_CONFIG_YAML_GLOBAL = '__APP_CONFIG_YAML__'
 
 /** Either half of the public API: a lazy `Config` or the definition it wraps. */
 export type ConfigInput<S extends Section = Section, C extends Section = Section> =
@@ -32,11 +36,17 @@ export interface AppConfigOptions {
 }
 
 /**
- * Vite plugin that bakes the client section into the bundle. The load happens in
- * the `config` hook, so errors surface while Vite resolves its config, and the
- * result is cached so a second call to the hook does not read the files again.
- * In dev the plugin restarts the server when a layer changes, which runs the
- * `config` hook again and bakes in the new values.
+ * Vite plugin that bakes config into the bundle. Every environment gets the
+ * client section on a global. Server environments, such as a Cloudflare Worker
+ * built with the Cloudflare Vite plugin, also get the merged YAML trimmed to
+ * the paths the definition reads, so the worker entry can resolve the full
+ * config without a filesystem. The client environment never gets that second
+ * global, so server YAML stays out of the browser bundle.
+ *
+ * The load happens in the `config` hook, so errors surface while Vite resolves
+ * its config, and the result is cached so later hooks do not read the files
+ * again. In dev the plugin restarts the server when a layer changes, which
+ * runs the hooks again and bakes in the new values.
  */
 export default function appConfig<S extends Section, C extends Section>(
   config: ConfigInput<S, C>,
@@ -44,10 +54,16 @@ export default function appConfig<S extends Section, C extends Section>(
 ): Plugin {
   const watch = options.watch ?? true
   let result: LoadResult<S, C> | undefined
+  let yaml: YamlObject | undefined
 
   function load(): LoadResult<S, C> {
     if (result === undefined) result = loadConfig(toDefinition(config))
     return result
+  }
+
+  function bake(): YamlObject {
+    if (yaml === undefined) yaml = bakeYaml(toDefinition(config)).yaml
+    return yaml
   }
 
   return {
@@ -55,6 +71,12 @@ export default function appConfig<S extends Section, C extends Section>(
     config() {
       const { client } = load()
       return { define: { [`globalThis.${APP_CONFIG_GLOBAL}`]: JSON.stringify(client) } }
+    },
+    configEnvironment(name, environment) {
+      const isServer =
+        environment.consumer === undefined ? name !== 'client' : environment.consumer === 'server'
+      if (!isServer) return
+      return { define: { [`globalThis.${APP_CONFIG_YAML_GLOBAL}`]: JSON.stringify(bake()) } }
     },
     configureServer(server) {
       if (!watch) return
@@ -64,8 +86,9 @@ export default function appConfig<S extends Section, C extends Section>(
 
       const changed = (file: string): void => {
         if (!isLayer(file)) return
-        // Drop the cache so the config hook reloads after the restart.
+        // Drop the caches so the hooks reload after the restart.
         result = undefined
+        yaml = undefined
         void server.restart()
       }
 

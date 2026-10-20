@@ -130,6 +130,10 @@ Parsing uses the YAML core schema, so `yes`, `no`, `on`, `off` and dates stay st
 
 Takes `{ server?, client?, root?, dir?, mode?, emptyStringAsUndefined?, envPrefix? }` and returns a lazy `Config`. Both sections are optional. A key may hold a group of sources instead of one source, and groups nest to any depth. The nesting gives a `field()` its YAML path and shapes the result.
 
+### `bakeYaml(definition)`
+
+The build-time half of the Worker story, exported from the Node entry for tooling. Reads the YAML layers, validates the values that are present, and returns `{ yaml, mode, root, dirs, files }` where `yaml` is the merged document trimmed to the paths the definition reads. The Vite plugin calls it for server environments.
+
 ### `loadConfig(definition)`
 
 The eager, synchronous version. Same definition, but it reads and validates immediately and returns the full result:
@@ -212,6 +216,7 @@ Use `field()` with an object schema when every value in a subtree is validated a
 ### Types
 
 - `Config<S, C>`: what `defineConfig` returns. Has `server` and `client` getters and a `reload` method.
+- `BakedConfig<S, C>`: the Worker counterpart, from `@lunarhue/config/worker`.
 - `InferConfig<T>`: the `{ server, client }` value types from a `Config`. Useful for passing config into a function.
 - `ConfigIssue`: `{ section, key, source, path, file?, env?, message }`. `source` is the side that supplied the value, `env`, `file`, or `none` when neither had one. `file` and `env` are the resolved locations the key reads from.
 - Also exported: `ConfigDefinition`, `ConfigOptions`, `FieldOptions`, `InferSection`, `LoadResult`, `Source`.
@@ -290,6 +295,44 @@ const html = `<!doctype html>
 ```
 
 `serializeClient` returns JavaScript that assigns the client section to the global. It escapes `</script>` so a config value cannot close the tag. Put it before the bundle that reads the config.
+
+## Cloudflare Workers
+
+A Worker has no filesystem, so the YAML is baked into the bundle at build time and the env side of every key resolves against the Worker's bindings at runtime. The same `config.ts` works unchanged: Wrangler and the Cloudflare Vite plugin resolve the `workerd` export condition, which picks a Worker build of `defineConfig` the way browsers pick the client build.
+
+Build with Vite and the plugin:
+
+```ts
+// vite.config.ts
+import { cloudflare } from '@cloudflare/vite-plugin'
+import appConfig from '@lunarhue/config/vite'
+import { defineConfig } from 'vite'
+import { config } from './src/config'
+
+export default defineConfig({
+  plugins: [cloudflare(), appConfig(config)],
+})
+```
+
+What the plugin bakes in a server environment is the merged YAML trimmed to the paths the definition reads, in both sections. Anything else in the files stays out of the bundle, and so does every `.env` value. The client environment never gets the YAML global, so server YAML cannot reach the browser bundle. Values that exist in YAML are validated at build time, so a bad committed value fails the build. A key whose YAML value is absent is left for runtime, since a binding may supply it.
+
+The mode is fixed at build time. `vite build --mode production` bakes `config.production.yml`. Build once per mode.
+
+At runtime the Worker entry reads bindings through `cloudflare:workers`, so nothing has to be passed in from `fetch`:
+
+```ts
+import { config } from './config'
+
+export default {
+  async fetch() {
+    return new Response(config.server.app.name)
+  },
+}
+```
+
+Bindings from `[vars]` and `wrangler secret put` are strings and follow the scalar rule above. A non-string binding such as a KV namespace passes through untouched, so `env('KV', z.custom<KVNamespace>(...))` works if you want it typed through the config.
+
+The first read validates and caches per isolate. `reload()` does nothing, and there is no `watchConfig`. The entry is also importable directly as `@lunarhue/config/worker`. Without the Vite plugin the baked global is missing and the first read throws a message that says so.
 
 ## Reloading
 

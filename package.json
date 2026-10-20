@@ -1,6 +1,6 @@
 {
   "name": "@lunarhue/config",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Layered YAML and .env config with Standard Schema validation and a server/client split",
   "license": "MIT",
   "author": "Tristen Dillon",
@@ -21,7 +21,8 @@
     "zod",
     "valibot",
     "arktype",
-    "vite"
+    "vite",
+    "cloudflare-workers"
   ],
   "type": "module",
   "sideEffects": false,
@@ -31,8 +32,13 @@
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
+      "workerd": "./dist/worker.js",
       "browser": "./dist/client.js",
       "default": "./dist/index.js"
+    },
+    "./worker": {
+      "types": "./dist/worker.d.ts",
+      "default": "./dist/worker.js"
     },
     "./vite": {
       "types": "./dist/vite.d.ts",
