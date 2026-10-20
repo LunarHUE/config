@@ -2,7 +2,7 @@
 
 Layered YAML and `.env` config for TypeScript apps. It finds your repo root, reads `config.default.yml`, `config.<mode>.yml` and `config.local.yml` plus the matching `.env` files, merges them with a fixed precedence order, validates everything once against any Standard Schema validator, and hands back a `server` object and a `client` object.
 
-Why it exists. Non-secret settings belong in YAML you commit, so a diff shows what changed between environments. Secrets belong in `.env` files you gitignore. Both halves end up in one schema and one validation pass, so a bad value fails at startup with every problem listed, not on the first request that touches it. The server/client split is enforced at the import boundary: browser builds resolve a different entry point that has no filesystem access at all, so a server key cannot leak into a bundle because someone forgot a `PUBLIC_` prefix.
+Why it exists. Non-secret settings belong in YAML you commit, so a diff shows what changed between environments. Secrets belong in `.env` files you gitignore. A key can live in YAML, in an env var, or in YAML with an env override, and its YAML path follows where you put it in the definition. Both halves end up in one schema and one validation pass, so a bad value fails at startup with every problem listed, not on the first request that touches it. The server/client split is enforced at the import boundary: browser builds resolve a different entry point that has no filesystem access at all, so a server key cannot leak into a bundle because someone forgot a `PUBLIC_` prefix.
 
 Runtime: Bun 1.2+ or Node 22+. One runtime dependency (`yaml`). `vite` is an optional peer.
 
@@ -35,6 +35,8 @@ Create these files at the repo root.
 ```yaml
 app:
   name: Acme
+database:
+  poolMax: 10
 logging:
   level: info
 ```
@@ -42,24 +44,29 @@ logging:
 `src/config.ts`:
 
 ```ts
-import { defineConfig, env, file } from '@lunarhue/config'
+import { defineConfig, env, field } from '@lunarhue/config'
 import { z } from 'zod'
+
+// A group is a plain object. It reads from wherever it is mounted.
+const database = {
+  url: env('DATABASE_URL', z.url()),
+  poolMax: field(z.number().int().positive(), { env: 'DATABASE_POOL_MAX' }),
+}
 
 export const config = defineConfig({
   server: {
-    database: {
-      url: env('DATABASE_URL', z.url()),
-      poolMax: env('DATABASE_POOL_MAX', z.coerce.number().int().positive().optional()),
-    },
+    database,
     sessionSecret: env('SESSION_SECRET', z.string().min(32)),
   },
   client: {
-    appName: file('app.name', z.string()),
-    logLevel: file('logging.level', z.enum(['debug', 'info', 'warn', 'error']).default('info')),
+    app: { name: field(z.string()) },
+    logging: { level: field(z.enum(['debug', 'info', 'warn', 'error']).default('info')) },
     apiUrl: env('PUBLIC_API_URL', z.url()),
   },
 })
 ```
+
+`database.poolMax` reads yaml `database.poolMax`, and `DATABASE_POOL_MAX` overrides it when set. `client.app.name` reads yaml `app.name`. `DATABASE_URL` is env only and never looked up in YAML.
 
 Read it anywhere:
 
@@ -67,14 +74,14 @@ Read it anywhere:
 import { config } from './config'
 
 const db = connect(config.server.database.url, { max: config.server.database.poolMax })
-console.log(config.client.appName, config.client.logLevel)
+console.log(config.client.app.name, config.client.logging.level)
 ```
 
 `defineConfig` is lazy. Nothing is read from disk until the first access of `config.server` or `config.client`. The result is cached for the process. A failed load is not cached, so the next read retries and throws again.
 
 ## How loading works
 
-**Root discovery.** The loader walks up from `process.cwd()` and stops at the first directory containing `config.default.yml`. That directory is the root, and every YAML and `.env` file is resolved against it. A script in `packages/db` gets the same config as the app at the root. If no marker is found and any declared key uses `file()`, the loader throws `RootNotFoundError`. If every key uses `env()`, it falls back to the cwd.
+**Root discovery.** The loader walks up from `process.cwd()` and stops at the first directory containing `config.default.yml`. That directory is the root, and every YAML and `.env` file is resolved against it. A script in `packages/db` gets the same config as the app at the root. If no marker is found and any declared key has a YAML side, the loader throws `RootNotFoundError`. If every key is env only, it falls back to the cwd.
 
 **Per-package layers.** Pass `dir` and the package's own files load after the root's, so an app or package can override shared values. Discovery then starts at the parent of `dir`, which keeps a `config.default.yml` inside the package from being taken for the repo root. If `dir` holds the only marker, `dir` is the root and there is one layer set, not two. See [Per-package layers](#per-package-layers).
 
@@ -130,7 +137,7 @@ Parsing uses the YAML core schema, so `yes`, `no`, `on`, `off` and dates stay st
 
 ### `defineConfig(definition)`
 
-Takes `{ server?, client?, root?, dir?, mode?, emptyStringAsUndefined? }` and returns a lazy `Config`. Both sections are optional. Key names are yours; the `env()` name or `file()` path is what maps to a source. A key may hold a group of sources instead of one source, and groups nest to any depth; nesting changes only the shape of the result and the dotted key an issue reports.
+Takes `{ server?, client?, root?, dir?, mode?, emptyStringAsUndefined?, envPrefix? }` and returns a lazy `Config`. Both sections are optional. A key may hold a group of sources instead of one source, and groups nest to any depth. The nesting gives a `field()` its YAML path and shapes the result.
 
 ### `loadConfig(definition)`
 
@@ -156,46 +163,67 @@ result.envWritten // env keys the loader set in process.env because no value was
 
 Use it when you want `mode`, `root`, `dirs` or `files`, for example to log what got loaded.
 
+### `field(schema, options?)`
+
+Declares a value that lives in YAML at the key's own dotted position inside its section, with an optional env override. `server.paths.nixosDir` reads yaml `paths.nixosDir`; the section name is not part of the path, so a server key and a client key at the same position read the same YAML value.
+
+Options:
+
+- `env: 'NAME'` names an env var that overrides the YAML value when set. It beats every YAML layer.
+- `env: true` derives the name from the dotted key: upper snake case, behind `envPrefix` when one is set. `paths.nixosDir` becomes `PATHS_NIXOS_DIR`, or `APP_PATHS_NIXOS_DIR` with `envPrefix: 'APP'`.
+- `file: 'other.path'` overrides the derived YAML path.
+- `file: false` turns the YAML side off, which with an env side is the same as `env()`.
+
+An env value for a field that also has a YAML side is read the way YAML reads a plain scalar, so both sides produce the same type: `8080` is a number, `true` a boolean, `null` is null, and anything else is a string. Wrap the whole value in quotes to keep it a string. In a `.env` file that means a second pair, `PORT='"8080"'`, because the file syntax strips the outer one. Env-only keys are never parsed and always arrive as strings.
+
 ### `env(name, schema)`
 
-Declares a value read from the merged env layers by variable name.
+Declares a value read from the merged env layers by variable name and never from YAML. Use it for secrets.
 
 ### `file(path, schema)`
 
-Declares a value read from the merged YAML by dotted path, for example `logging.level`. The path may point at an object, and the schema validates the whole subtree.
+Declares a value read from the merged YAML by an explicit dotted path and never from env. The path may point at an object, and the schema validates the whole subtree.
 
 ### Groups
 
-A key may hold another object of sources instead of a single `env()` or `file()`. The result nests the same way, and env and file sources can sit side by side in one group:
+A key may hold another object of sources instead of a single leaf. The result nests the same way, and all three kinds of source can sit side by side in one group. A group is a plain object, so define it once and mount it anywhere; its fields read from wherever it ends up:
 
 ```ts
+const axiom = {
+  url: field(z.url().optional()),
+  token: env('AXIOM_TOKEN', z.string().min(1).optional()),
+  traces: field(z.object({ dataset: z.string().min(1) }).optional()),
+}
+
 export const config = defineConfig({
   server: {
     telemetry: {
       exporterEndpoint: env('OTEL_EXPORTER_OTLP_ENDPOINT', z.url().optional()),
-      serviceName: file('telemetry.api.serviceName', z.string().min(1)),
+      serviceName: field(z.string().min(1)),   // yaml telemetry.serviceName
+      axiom,                                   // yaml telemetry.axiom.url, telemetry.axiom.traces
     },
   },
 })
 
-config.server.telemetry.serviceName // string
+config.server.telemetry.axiom.url // string | undefined
 ```
 
-Use `file()` with an object schema when every value in the group comes from one YAML subtree. Use a group when the values come from different places.
+Use `field()` with an object schema when every value in a subtree is validated as one unit. Use a group when the values come from different places or you want a type per key.
 
 ### Options
 
 - `root`: skip discovery and use this directory. Relative paths resolve against the cwd.
 - `dir`: directory of the package that owns this definition, usually `import.meta.dirname`. Its config and `.env` files load after the root's. Relative paths resolve against the cwd.
 - `mode`: override `APP_ENV` and `NODE_ENV`.
-- `emptyStringAsUndefined`: default `true`. An env var set to `""` becomes `undefined` before validation, so `.default()` and `.optional()` behave the way you expect. Empty values read from YAML are left alone.
+- `emptyStringAsUndefined`: default `true`. An env var set to `""` becomes `undefined` before validation, so `.default()` and `.optional()` behave the way you expect. For a field with both sides, an empty env var falls through to the YAML value. Empty values read from YAML are left alone.
+- `envPrefix`: prefix for env names derived with `env: true`. No prefix by default.
 
 ### Types
 
 - `Config<S, C>`: what `defineConfig` returns. Has `server` and `client` getters and a `reload` method.
 - `InferConfig<T>`: the `{ server, client }` value types from a `Config`. Useful for passing config into a function.
-- `ConfigIssue`: `{ section, key, source, path, message }`.
-- Also exported: `ConfigDefinition`, `ConfigOptions`, `InferSection`, `LoadResult`, `Source`.
+- `ConfigIssue`: `{ section, key, source, path, file?, env?, message }`. `source` is the side that supplied the value, `env`, `file`, or `none` when neither had one. `file` and `env` are the resolved locations the key reads from.
+- Also exported: `ConfigDefinition`, `ConfigOptions`, `FieldOptions`, `InferSection`, `LoadResult`, `Source`.
 
 ```ts
 import type { InferConfig } from '@lunarhue/config'
@@ -222,7 +250,13 @@ Keys inside a nested group are reported with the dotted key, so a bad `OTEL_EXPO
 
 Nested schema failures append the inner path to both the key and the source path, so an object at `auth` missing `signInPath` reports `client.auth.signInPath  (file auth.signInPath)`.
 
-`RootNotFoundError` has a `cwd` property and is thrown when no `config.default.yml` exists in the cwd or any parent, and at least one key reads from a file.
+A field with both sides reports only the side that supplied the bad value. When neither side had a value it lists both, so you know where to put one:
+
+```
+  server.paths.nixosDir  (file paths.nixosDir, env NIXOS_DIR)  Required
+```
+
+`RootNotFoundError` has a `cwd` property and is thrown when no `config.default.yml` exists in the cwd or any parent, and at least one key has a YAML side.
 
 `BoundaryError` has a `key` property and is thrown in the browser when code reads `config.server.anything`.
 
@@ -339,13 +373,13 @@ In a monorepo the root holds the config every package shares, and each app or pa
 
 ```ts
 // apps/api/config.ts
-import { defineConfig, env, file } from '@lunarhue/config'
+import { defineConfig, env, field } from '@lunarhue/config'
 import { z } from 'zod'
 
 export const config = defineConfig({
   dir: import.meta.dirname,
   server: { databaseUrl: env('DATABASE_URL', z.url()) },
-  client: { appName: file('app.name', z.string()) },
+  client: { app: { name: field(z.string()) } },
 })
 ```
 
