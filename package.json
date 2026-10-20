@@ -1,16 +1,16 @@
 {
   "name": "@lunarhue/config",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Layered YAML and .env config with Standard Schema validation and a server/client split",
   "license": "MIT",
   "author": "Tristen Dillon",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/tristendillon/config.git"
+    "url": "git+https://github.com/LunarHUE/config.git"
   },
-  "homepage": "https://github.com/tristendillon/config#readme",
+  "homepage": "https://github.com/LunarHUE/config#readme",
   "bugs": {
-    "url": "https://github.com/tristendillon/config/issues"
+    "url": "https://github.com/LunarHUE/config/issues"
   },
   "keywords": [
     "config",

@@ -2,11 +2,17 @@ import type { StandardSchemaV1 } from '@standard-schema/spec'
 
 export type SourceKind = 'env' | 'file'
 
-/** One declared value: where it comes from and how to validate it. */
+/**
+ * One declared value: where it comes from and how to validate it. Each side is
+ * a location, `true` to derive the location from the key's position in its
+ * section, or `false` when the value never comes from that side. When both
+ * sides are set the env side wins over every YAML layer.
+ */
 export interface Source<T = unknown> {
-  readonly kind: SourceKind
-  /** Env var name for `env`, dotted YAML path for `file`. */
-  readonly path: string
+  /** Dotted YAML path such as `logging.level`, `true` for the key's own dotted position, or `false`. */
+  readonly file: string | boolean
+  /** Env var name, `true` for the upper snake case of the dotted key behind `envPrefix`, or `false`. */
+  readonly env: string | boolean
   readonly schema: StandardSchemaV1<unknown, T>
 }
 
@@ -28,6 +34,8 @@ export interface ConfigOptions {
   mode?: string
   /** Treat empty env values as `undefined` before validation. Default `true`. */
   emptyStringAsUndefined?: boolean
+  /** Prefix for derived env names, so `paths.nixosDir` with `envPrefix: 'APP'` reads `APP_PATHS_NIXOS_DIR`. */
+  envPrefix?: string
 }
 
 export interface ConfigDefinition<

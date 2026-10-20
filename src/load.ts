@@ -22,7 +22,7 @@ export function loadConfig<S extends Section, C extends Section>(
 
   const root = found ?? dir ?? cwd
   const dirs = dir === undefined || dir === root ? [root] : [root, dir]
-  const env = loadEnvLayers(dirs, mode)
+  const env = loadEnvLayers(dirs)
   const yaml =
     found === undefined
       ? { data: {} as { [key: string]: YamlValue }, files: [] as string[] }
@@ -30,6 +30,7 @@ export function loadConfig<S extends Section, C extends Section>(
 
   const { server, client } = validate(definition, env.env, yaml.data, {
     emptyStringAsUndefined: definition.emptyStringAsUndefined ?? true,
+    envPrefix: definition.envPrefix,
   })
 
   return {
@@ -61,7 +62,7 @@ function findConfigRoot(
 /** True when any declared key reads from a YAML file, which makes the root mandatory. */
 function needsYaml(definition: ConfigDefinition): boolean {
   for (const section of [definition.server, definition.client]) {
-    for (const [, source] of sources(section ?? {})) if (source.kind === 'file') return true
+    for (const [, source] of sources(section ?? {})) if (source.file !== false) return true
   }
   return false
 }

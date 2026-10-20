@@ -23,7 +23,7 @@ export function watchConfig(config: Config, options: WatchOptions = {}): () => v
   const result = config[RESULT]
   if (result === undefined) return () => {}
 
-  const names = new Set([...envLayerFiles(result.mode), ...yamlLayerFiles(result.mode)])
+  const names = new Set([...envLayerFiles(), ...yamlLayerFiles(result.mode)])
   const watchers: fs.FSWatcher[] = []
   let timer: ReturnType<typeof setTimeout> | undefined
   let stopped = false
