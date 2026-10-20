@@ -89,7 +89,6 @@ describe('loadConfig', () => {
     const KEY = envKey('LOAD_FILES_KEY')
     const root = tempRoot({
       '.env': `${KEY}=a\n`,
-      '.env.local': '',
       '.env.staging': '',
       'config.default.yml': 'a: 1\n',
       'config.staging.yml': 'a: 2\n',
@@ -104,8 +103,6 @@ describe('loadConfig', () => {
 
     expect(result.files).toEqual([
       path.join(root, '.env'),
-      path.join(root, '.env.local'),
-      path.join(root, '.env.staging'),
       path.join(root, 'config.default.yml'),
       path.join(root, 'config.staging.yml'),
       path.join(root, 'config.local.yml'),

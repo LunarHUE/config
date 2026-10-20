@@ -57,9 +57,12 @@ function unescape(value: string): string {
   })
 }
 
-/** File names for a mode, lowest precedence first. */
-export function envLayerFiles(mode: string): string[] {
-  return ['.env', '.env.local', `.env.${mode}`, `.env.${mode}.local`]
+/**
+ * The env file names read in each directory. There is one: the mode lives in
+ * the YAML layers, and on a server the environment itself holds the secrets.
+ */
+export function envLayerFiles(): string[] {
+  return ['.env']
 }
 
 export interface EnvLayersResult {
@@ -72,22 +75,17 @@ export interface EnvLayersResult {
 }
 
 /**
- * Read the .env layers in every directory of `dirs`, merge them (later file
- * wins), then apply `processEnv` on top. `dirs` runs lowest precedence first,
- * so a file in a later directory beats every file in an earlier one. Writes
- * file values into `processEnv` for keys it does not already have, so code
- * that reads process.env directly sees them.
+ * Read the .env file in every directory of `dirs`, merge them (later directory
+ * wins), then apply `processEnv` on top. `dirs` runs lowest precedence first.
+ * Writes file values into `processEnv` for keys it does not already have, so
+ * code that reads process.env directly sees them.
  *
  * The returned `env` is the `processEnv` object itself, after that mutation.
  */
-export function loadEnvLayers(
-  dirs: string[],
-  mode: string,
-  processEnv: EnvMap = process.env,
-): EnvLayersResult {
+export function loadEnvLayers(dirs: string[], processEnv: EnvMap = process.env): EnvLayersResult {
   const files: string[] = []
   const merged: Record<string, string> = {}
-  const names = envLayerFiles(mode)
+  const names = envLayerFiles()
 
   for (const dir of dirs) {
     for (const name of names) {

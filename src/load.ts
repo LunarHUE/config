@@ -22,7 +22,7 @@ export function loadConfig<S extends Section, C extends Section>(
 
   const root = found ?? dir ?? cwd
   const dirs = dir === undefined || dir === root ? [root] : [root, dir]
-  const env = loadEnvLayers(dirs, mode)
+  const env = loadEnvLayers(dirs)
   const yaml =
     found === undefined
       ? { data: {} as { [key: string]: YamlValue }, files: [] as string[] }

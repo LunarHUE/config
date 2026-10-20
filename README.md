@@ -1,8 +1,8 @@
 # @lunarhue/config
 
-Layered YAML and `.env` config for TypeScript apps. It finds your repo root, reads `config.default.yml`, `config.<mode>.yml` and `config.local.yml` plus the matching `.env` files, merges them with a fixed precedence order, validates everything once against any Standard Schema validator, and hands back a `server` object and a `client` object.
+Layered YAML and `.env` config for TypeScript apps. It finds your repo root, reads `config.default.yml`, `config.<mode>.yml` and `config.local.yml` plus `.env`, merges them with a fixed precedence order, validates everything once against any Standard Schema validator, and hands back a `server` object and a `client` object.
 
-Why it exists. Non-secret settings belong in YAML you commit, so a diff shows what changed between environments. Secrets belong in `.env` files you gitignore. A key can live in YAML, in an env var, or in YAML with an env override, and its YAML path follows where you put it in the definition. Both halves end up in one schema and one validation pass, so a bad value fails at startup with every problem listed, not on the first request that touches it. The server/client split is enforced at the import boundary: browser builds resolve a different entry point that has no filesystem access at all, so a server key cannot leak into a bundle because someone forgot a `PUBLIC_` prefix.
+Why it exists. Non-secret settings belong in YAML you commit, so a diff shows what changed between environments. The mode is a YAML concern: `config.production.yml` holds what differs in production. Secrets belong in a `.env` you gitignore on your machine and in the real environment on a server, so `.env` has no mode variants. A key can live in YAML, in an env var, or in YAML with an env override, and its YAML path follows where you put it in the definition. Both halves end up in one schema and one validation pass, so a bad value fails at startup with every problem listed, not on the first request that touches it. The server/client split is enforced at the import boundary: browser builds resolve a different entry point that has no filesystem access at all, so a server key cannot leak into a bundle because someone forgot a `PUBLIC_` prefix.
 
 Runtime: Bun 1.2+ or Node 22+. One runtime dependency (`yaml`). `vite` is an optional peer.
 
@@ -25,10 +25,7 @@ Create these files at the repo root.
 | `config.default.yml` | yes       | Base values. Also the marker that identifies the repo root. |
 | `config.<mode>.yml`  | yes       | Per-mode overrides, for example `config.production.yml`.    |
 | `config.local.yml`   | no        | Your machine's overrides.                                   |
-| `.env`               | no        | Secrets shared by every mode.                               |
-| `.env.local`         | no        | Your machine's secrets.                                     |
-| `.env.<mode>`        | no        | Secrets for one mode.                                       |
-| `.env.<mode>.local`  | no        | Per-mode secrets.                                           |
+| `.env`               | no        | Your machine's secrets. A server sets them in the environment. |
 
 `config.default.yml`:
 
@@ -87,19 +84,13 @@ console.log(config.client.app.name, config.client.logging.level)
 
 **Mode.** `APP_ENV`, then `NODE_ENV`, then `development`. An empty or whitespace-only value counts as unset and falls through. The `mode` option overrides all three.
 
-**Env precedence**, lowest first. Without `dir`, only the root block applies:
+**Env precedence**, lowest first. Without `dir`, only the root file applies:
 
 1. root `.env`
-2. root `.env.local`
-3. root `.env.<mode>`
-4. root `.env.<mode>.local`
-5. `dir/.env`
-6. `dir/.env.local`
-7. `dir/.env.<mode>`
-8. `dir/.env.<mode>.local`
-9. `process.env`
+2. `dir/.env`
+3. `process.env`
 
-Closer wins. Every file in `dir` beats every file at the root, so `dir/.env` overrides the root's `.env.<mode>.local`.
+Closer wins. There are no `.env.local` or `.env.<mode>` files; the mode selects YAML layers only, and the file is already per machine because it is gitignored.
 
 A variable already present in `process.env` beats every file, so a value exported by your shell or injected by CI always wins. After merging, the loader writes file values into `process.env` for keys it does not already have. SDKs that read `process.env.AWS_REGION` directly see them without any extra wiring.
 
@@ -365,7 +356,7 @@ export default defineConfig({
 })
 ```
 
-Running `bunx drizzle-kit push` from `packages/db` finds the root, loads `.env` and `.env.local` from there, and validates `DATABASE_URL` with the same schema the app uses.
+Running `bunx drizzle-kit push` from `packages/db` finds the root, loads `.env` from there, and validates `DATABASE_URL` with the same schema the app uses.
 
 ## Per-package layers
 

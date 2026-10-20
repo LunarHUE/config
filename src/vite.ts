@@ -81,7 +81,7 @@ export default function appConfig<S extends Section, C extends Section>(
 function layerTest(result: LoadResult<Section, Section>): (file: string) => boolean {
   const files = new Set(result.files)
   const dirs = new Set(result.dirs)
-  const names = new Set([...envLayerFiles(result.mode), ...yamlLayerFiles(result.mode)])
+  const names = new Set([...envLayerFiles(), ...yamlLayerFiles(result.mode)])
 
   return (file) =>
     files.has(file) || (dirs.has(path.dirname(file)) && names.has(path.basename(file)))
