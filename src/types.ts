@@ -73,6 +73,14 @@ export interface LoadResult<S extends Section = Section, C extends Section = Sec
 /** Env vars after merging every `.env` layer with `process.env`. */
 export type EnvMap = Record<string, string | undefined>
 
+/**
+ * What the env side of a key is resolved against. On Node this is `process.env`;
+ * in a Worker it is the bindings object, whose values need not be strings.
+ */
+export type EnvValues = Record<string, unknown>
+
 /** A parsed YAML document. Layers are merged into one of these. */
 export type YamlValue =
   string | number | boolean | null | YamlValue[] | { [key: string]: YamlValue }
+
+export type YamlObject = { [key: string]: YamlValue }

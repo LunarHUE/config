@@ -3,7 +3,15 @@ import { ConfigError, type ConfigIssue } from './errors'
 import { getPath } from './merge'
 import { parseScalar } from './scalar'
 import { isSource, type Locations, locations } from './sources'
-import type { ConfigDefinition, EnvMap, InferSection, Section, Source, SourceKind, YamlValue } from './types'
+import type {
+  ConfigDefinition,
+  EnvValues,
+  InferSection,
+  Section,
+  Source,
+  SourceKind,
+  YamlObject,
+} from './types'
 
 export interface ValidateOptions {
   emptyStringAsUndefined: boolean
@@ -25,8 +33,8 @@ interface Picked {
  */
 export function validate<S extends Section, C extends Section>(
   definition: ConfigDefinition<S, C>,
-  env: EnvMap,
-  yaml: { [key: string]: YamlValue },
+  env: EnvValues,
+  yaml: YamlObject,
   options: ValidateOptions,
 ): { server: InferSection<S>; client: InferSection<C> } {
   const issues: ConfigIssue[] = []
@@ -41,8 +49,8 @@ export function validate<S extends Section, C extends Section>(
 function validateSection(
   section: SectionName,
   keys: Section | undefined,
-  env: EnvMap,
-  yaml: { [key: string]: YamlValue },
+  env: EnvValues,
+  yaml: YamlObject,
   options: ValidateOptions,
   issues: ConfigIssue[],
   prefix = '',
@@ -62,18 +70,7 @@ function validateSection(
     const result = runSchema(section, key, source, picked.value)
 
     if (result.issues) {
-      for (const issue of result.issues) {
-        const suffix = dottedPath(issue.path)
-        issues.push({
-          section,
-          key: key + suffix,
-          source: picked.source,
-          path: picked.path === '' ? '' : picked.path + suffix,
-          ...(where.file === undefined ? {} : { file: where.file + suffix }),
-          ...(where.env === undefined ? {} : { env: where.env }),
-          message: issue.message,
-        })
-      }
+      issues.push(...schemaIssues(section, key, result.issues, picked.source, where))
       continue
     }
 
@@ -83,11 +80,37 @@ function validateSection(
   return out
 }
 
-/** Env wins when set. An env value for a key that also lives in YAML is read as a YAML scalar. */
+/** Turn the issues one schema run produced into ConfigIssues for the key at `where`. */
+export function schemaIssues(
+  section: SectionName,
+  key: string,
+  issues: readonly StandardSchemaV1.Issue[],
+  source: SourceKind | 'none',
+  where: Locations,
+): ConfigIssue[] {
+  return issues.map((issue) => {
+    const suffix = dottedPath(issue.path)
+    const path = source === 'env' ? where.env! : source === 'file' ? where.file! + suffix : ''
+    return {
+      section,
+      key: key + suffix,
+      source,
+      path,
+      ...(where.file === undefined ? {} : { file: where.file + suffix }),
+      ...(where.env === undefined ? {} : { env: where.env }),
+      message: issue.message,
+    }
+  })
+}
+
+/**
+ * Env wins when set. A string env value for a key that also lives in YAML is
+ * read as a YAML scalar; a non-string binding passes through as it is.
+ */
 function pick(
   where: Locations,
-  env: EnvMap,
-  yaml: { [key: string]: YamlValue },
+  env: EnvValues,
+  yaml: YamlObject,
   options: ValidateOptions,
 ): Picked {
   if (where.env !== undefined) {
@@ -95,7 +118,7 @@ function pick(
     if (options.emptyStringAsUndefined && value === '') value = undefined
     if (value !== undefined) {
       return {
-        value: where.file === undefined ? value : parseScalar(value),
+        value: where.file !== undefined && typeof value === 'string' ? parseScalar(value) : value,
         source: 'env',
         path: where.env,
       }
@@ -108,7 +131,7 @@ function pick(
   return { value: undefined, source: 'none', path: '' }
 }
 
-function runSchema(
+export function runSchema(
   section: SectionName,
   key: string,
   source: Source,

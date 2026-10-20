@@ -1,8 +1,6 @@
-import type { YamlValue } from './types'
+import type { YamlObject, YamlValue } from './types'
 
-type YamlObject = { [key: string]: YamlValue }
-
-function isObject(value: YamlValue): value is YamlObject {
+function isObject(value: YamlValue | undefined): value is YamlObject {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
@@ -41,4 +39,31 @@ export function getPath(doc: YamlValue, path: string): YamlValue | undefined {
     current = next
   }
   return current
+}
+
+/** Write `value` at a dotted path, creating objects along the way. Mutates `doc`. */
+export function setPath(doc: YamlObject, path: string, value: YamlValue): void {
+  const segments = path.split('.')
+  let current: YamlObject = doc
+  for (const segment of segments.slice(0, -1)) {
+    const next = current[segment]
+    if (!isObject(next)) {
+      const created: YamlObject = {}
+      current[segment] = created
+      current = created
+    } else {
+      current = next
+    }
+  }
+  current[segments[segments.length - 1]!] = value
+}
+
+/** A copy of `doc` holding only the subtrees at `paths`. Paths with no value are left out. */
+export function pickPaths(doc: YamlObject, paths: Iterable<string>): YamlObject {
+  const out: YamlObject = {}
+  for (const path of paths) {
+    const value = getPath(doc, path)
+    if (value !== undefined) setPath(out, path, clone(value))
+  }
+  return out
 }
