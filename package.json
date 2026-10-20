@@ -6,11 +6,11 @@
   "author": "Tristen Dillon",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/tristendillon/config.git"
+    "url": "git+https://github.com/LunarHUE/config.git"
   },
-  "homepage": "https://github.com/tristendillon/config#readme",
+  "homepage": "https://github.com/LunarHUE/config#readme",
   "bugs": {
-    "url": "https://github.com/tristendillon/config/issues"
+    "url": "https://github.com/LunarHUE/config/issues"
   },
   "keywords": [
     "config",
