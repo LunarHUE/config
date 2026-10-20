@@ -3,8 +3,14 @@ import type { SourceKind } from './types'
 export interface ConfigIssue {
   section: 'server' | 'client'
   key: string
-  source: SourceKind
+  /** The side that supplied the value, or `none` when neither side had one. */
+  source: SourceKind | 'none'
+  /** The env var name or YAML path that supplied the value. Empty for `none`. */
   path: string
+  /** The YAML path the key reads from, after derivation, when it has a file side. */
+  file?: string
+  /** The env var the key reads from, after derivation, when it has an env side. */
+  env?: string
   message: string
 }
 
@@ -32,8 +38,17 @@ export class BoundaryError extends Error {
   }
 }
 
+/** `(env DATABASE_URL)` for a supplied value; every declared side when nothing supplied one. */
+function describeSource(issue: ConfigIssue): string {
+  if (issue.source !== 'none') return `(${issue.source} ${issue.path})`
+  const sides: string[] = []
+  if (issue.file !== undefined) sides.push(`file ${issue.file}`)
+  if (issue.env !== undefined) sides.push(`env ${issue.env}`)
+  return `(${sides.join(', ')})`
+}
+
 function formatIssues(issues: ConfigIssue[]): string {
-  const rows = issues.map((i) => [`${i.section}.${i.key}`, `(${i.source} ${i.path})`, i.message])
+  const rows = issues.map((i) => [`${i.section}.${i.key}`, describeSource(i), i.message])
   const w0 = Math.max(...rows.map((r) => r[0]!.length))
   const w1 = Math.max(...rows.map((r) => r[1]!.length))
   const lines = rows.map((r) => `  ${r[0]!.padEnd(w0)}  ${r[1]!.padEnd(w1)}  ${r[2]}`)

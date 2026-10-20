@@ -1,8 +1,9 @@
 import { BoundaryError } from './errors'
 import type { ConfigDefinition, InferSection, Section } from './types'
 
-export { env, file } from './sources'
+export { env, field, file } from './sources'
 export { BoundaryError, ConfigError, RootNotFoundError } from './errors'
+export type { FieldOptions } from './sources'
 export type { ConfigDefinition, ConfigOptions, InferSection, Source } from './types'
 
 /** Name of the global the Vite plugin defines and `serializeClient` writes. */

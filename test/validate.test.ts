@@ -3,7 +3,7 @@ import { describe, expect, expectTypeOf, test } from 'vitest'
 import * as v from 'valibot'
 import { z } from 'zod'
 import { ConfigError } from '../src/errors'
-import { env, file } from '../src/sources'
+import { env, field, file } from '../src/sources'
 import type { ConfigDefinition, InferSection } from '../src/types'
 import { validate } from '../src/validate'
 
@@ -92,8 +92,8 @@ describe('validate', () => {
       'server.secret',
       'client.level',
     ])
-    expect(error.issues[0]).toMatchObject({ source: 'env', path: 'DATABASE_URL' })
-    expect(error.issues[2]).toMatchObject({ source: 'file', path: 'logging.level' })
+    expect(error.issues[0]).toMatchObject({ source: 'none', path: '', env: 'DATABASE_URL' })
+    expect(error.issues[2]).toMatchObject({ source: 'none', path: '', file: 'logging.level' })
   })
 
   test('the message lists every issue under one heading', () => {
@@ -222,9 +222,10 @@ describe('validate', () => {
     expect(error.issues[0]).toMatchObject({
       section: 'server',
       key: 'database.pool.max',
-      source: 'env',
-      path: 'POOL_MAX',
+      source: 'none',
+      env: 'POOL_MAX',
     })
+    expect(error.message).toContain('server.database.pool.max  (env POOL_MAX)')
   })
 
   test('a definition with several groups returns the same nesting', () => {
@@ -304,12 +305,172 @@ describe('validate', () => {
 
     expect(() =>
       validate(
-        { server: { slow: { kind: 'env', path: 'SLOW', schema: asyncSchema } } },
+        { server: { slow: { file: false, env: 'SLOW', schema: asyncSchema } } },
         {},
         {},
         defaults,
       ),
     ).toThrow(/Async schemas are not supported.*server\.slow/)
+  })
+})
+
+describe('field', () => {
+  test('reads the yaml at the dotted position of the key in its section', () => {
+    const result = validate(
+      {
+        server: { paths: { nixosDir: field(z.string()), dataDir: field(z.string()) } },
+        client: { paths: { nixosDir: field(z.string()) } },
+      },
+      {},
+      { paths: { nixosDir: '/etc/nixos', dataDir: '/var/lib/app' } },
+      defaults,
+    )
+
+    expect(result.server.paths).toEqual({ nixosDir: '/etc/nixos', dataDir: '/var/lib/app' })
+    expect(result.client.paths.nixosDir).toBe('/etc/nixos')
+  })
+
+  test('a string file option overrides the derived path', () => {
+    const result = validate(
+      { server: { legacy: field(z.string(), { file: 'old.place' }) } },
+      {},
+      { old: { place: 'x' } },
+      defaults,
+    )
+    expect(result.server.legacy).toBe('x')
+  })
+
+  test('a named env var wins over the yaml value', () => {
+    const definition = { server: { paths: { nixosDir: field(z.string(), { env: 'NIXOS_DIR' }) } } }
+    const yaml = { paths: { nixosDir: '/etc/nixos' } }
+
+    expect(validate(definition, {}, yaml, defaults).server.paths.nixosDir).toBe('/etc/nixos')
+    expect(validate(definition, { NIXOS_DIR: '/mnt/nixos' }, yaml, defaults).server.paths.nixosDir).toBe(
+      '/mnt/nixos',
+    )
+  })
+
+  test('env true derives the var name from the key and the prefix', () => {
+    const definition = { server: { paths: { nixosDir: field(z.string(), { env: true }) } } }
+
+    expect(
+      validate(definition, { PATHS_NIXOS_DIR: '/a' }, {}, defaults).server.paths.nixosDir,
+    ).toBe('/a')
+    expect(
+      validate(definition, { APP_PATHS_NIXOS_DIR: '/b', PATHS_NIXOS_DIR: '/a' }, {}, {
+        ...defaults,
+        envPrefix: 'APP',
+      }).server.paths.nixosDir,
+    ).toBe('/b')
+  })
+
+  test('an env value for a key with a file side is read as a yaml scalar', () => {
+    const result = validate(
+      {
+        server: {
+          port: field(z.number().int(), { env: 'PORT' }),
+          debug: field(z.boolean(), { env: 'DEBUG' }),
+          ratio: field(z.number(), { env: 'RATIO' }),
+          label: field(z.string(), { env: 'LABEL' }),
+          quoted: field(z.string(), { env: 'QUOTED' }),
+          off: field(z.null(), { env: 'OFF' }),
+        },
+      },
+      { PORT: '8080', DEBUG: 'true', RATIO: '0.5', LABEL: 'api', QUOTED: '"123"', OFF: 'null' },
+      {},
+      defaults,
+    )
+
+    expect(result.server).toEqual({
+      port: 8080,
+      debug: true,
+      ratio: 0.5,
+      label: 'api',
+      quoted: '123',
+      off: null,
+    })
+  })
+
+  test('an env only value stays a raw string', () => {
+    const result = validate(
+      { server: { code: env('CODE', z.string()) } },
+      { CODE: '0042' },
+      {},
+      defaults,
+    )
+    expect(result.server.code).toBe('0042')
+  })
+
+  test('an empty env value falls through to the yaml side', () => {
+    const result = validate(
+      { server: { port: field(z.number(), { env: 'PORT' }) } },
+      { PORT: '' },
+      { port: 3000 },
+      defaults,
+    )
+    expect(result.server.port).toBe(3000)
+  })
+
+  test('a missing two sided value names both sides', () => {
+    const error = expectConfigError(() =>
+      validate(
+        { server: { paths: { nixosDir: field(z.string(), { env: 'NIXOS_DIR' }) } } },
+        {},
+        {},
+        defaults,
+      ),
+    )
+
+    expect(error.issues[0]).toMatchObject({
+      key: 'paths.nixosDir',
+      source: 'none',
+      path: '',
+      file: 'paths.nixosDir',
+      env: 'NIXOS_DIR',
+    })
+    expect(error.message).toContain('server.paths.nixosDir  (file paths.nixosDir, env NIXOS_DIR)')
+  })
+
+  test('a bad value names only the side that supplied it', () => {
+    const definition = { server: { port: field(z.number().int(), { env: 'PORT' }) } }
+
+    const fromEnv = expectConfigError(() => validate(definition, { PORT: 'eighty' }, { port: 1 }, defaults))
+    expect(fromEnv.issues[0]).toMatchObject({ source: 'env', path: 'PORT', file: 'port', env: 'PORT' })
+    expect(fromEnv.message).toContain('server.port  (env PORT)')
+
+    const fromFile = expectConfigError(() => validate(definition, {}, { port: 'x' }, defaults))
+    expect(fromFile.issues[0]).toMatchObject({ source: 'file', path: 'port' })
+    expect(fromFile.message).toContain('server.port  (file port)')
+  })
+
+  test('a nested schema path is appended to the derived file path', () => {
+    const error = expectConfigError(() =>
+      validate(
+        { client: { auth: field(z.object({ signInPath: z.string() })) } },
+        {},
+        { auth: {} },
+        defaults,
+      ),
+    )
+
+    expect(error.issues[0]).toMatchObject({
+      key: 'auth.signInPath',
+      source: 'file',
+      path: 'auth.signInPath',
+      file: 'auth.signInPath',
+    })
+  })
+
+  test('a group defined on its own reads from where it is mounted', () => {
+    const paths = { nixosDir: field(z.string()) }
+    const result = validate(
+      { server: { a: { paths }, b: { paths } } },
+      {},
+      { a: { paths: { nixosDir: '/a' } }, b: { paths: { nixosDir: '/b' } } },
+      defaults,
+    )
+    expect(result.server.a.paths.nixosDir).toBe('/a')
+    expect(result.server.b.paths.nixosDir).toBe('/b')
   })
 })
 

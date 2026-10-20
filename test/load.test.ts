@@ -5,7 +5,7 @@ import path from 'node:path'
 import { z } from 'zod'
 import { ConfigError, RootNotFoundError } from '../src/errors'
 import { loadConfig } from '../src/load'
-import { env, file } from '../src/sources'
+import { env, field, file } from '../src/sources'
 
 const temps: string[] = []
 const envKeys: string[] = []
@@ -40,6 +40,26 @@ afterEach(() => {
 })
 
 describe('loadConfig', () => {
+  test('a field reads yaml at its own position and an env override through envPrefix', () => {
+    const NIXOS = envKey('LOAD_FIELD_PATHS_NIXOS_DIR')
+    const root = tempRoot({
+      '.env': `${NIXOS}=/mnt/nixos\n`,
+      'config.default.yml': 'paths:\n  nixosDir: /etc/nixos\n  dataDir: /var/lib/app\napi:\n  port: 3000\n',
+    })
+
+    const result = loadConfig({
+      root,
+      envPrefix: 'LOAD_FIELD',
+      server: {
+        paths: { nixosDir: field(z.string(), { env: true }), dataDir: field(z.string()) },
+        api: { port: field(z.number().int(), { env: true }) },
+      },
+    })
+
+    expect(result.server.paths).toEqual({ nixosDir: '/mnt/nixos', dataDir: '/var/lib/app' })
+    expect(result.server.api.port).toBe(3000)
+  })
+
   test('reads both sections from the env and yaml layers', () => {
     const DB = envKey('LOAD_DATABASE_URL')
     const root = tempRoot({

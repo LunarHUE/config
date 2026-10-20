@@ -1,14 +1,23 @@
 import type { StandardSchemaV1 } from '@standard-schema/spec'
 import { ConfigError, type ConfigIssue } from './errors'
 import { getPath } from './merge'
-import { isSource } from './sources'
-import type { ConfigDefinition, EnvMap, InferSection, Section, Source, YamlValue } from './types'
+import { parseScalar } from './scalar'
+import { isSource, type Locations, locations } from './sources'
+import type { ConfigDefinition, EnvMap, InferSection, Section, Source, SourceKind, YamlValue } from './types'
 
 export interface ValidateOptions {
   emptyStringAsUndefined: boolean
+  envPrefix?: string | undefined
 }
 
 type SectionName = 'server' | 'client'
+
+/** The raw value for one key and which side it came from. */
+interface Picked {
+  value: unknown
+  source: SourceKind | 'none'
+  path: string
+}
 
 /**
  * Validate every declared key in both sections and collect the failures into a
@@ -48,7 +57,9 @@ function validateSection(
       continue
     }
 
-    const result = runSchema(section, key, source, pick(source, env, yaml, options))
+    const where = locations(source, key, options.envPrefix)
+    const picked = pick(where, env, yaml, options)
+    const result = runSchema(section, key, source, picked.value)
 
     if (result.issues) {
       for (const issue of result.issues) {
@@ -56,8 +67,10 @@ function validateSection(
         issues.push({
           section,
           key: key + suffix,
-          source: source.kind,
-          path: source.path + suffix,
+          source: picked.source,
+          path: picked.path === '' ? '' : picked.path + suffix,
+          ...(where.file === undefined ? {} : { file: where.file + suffix }),
+          ...(where.env === undefined ? {} : { env: where.env }),
           message: issue.message,
         })
       }
@@ -70,17 +83,29 @@ function validateSection(
   return out
 }
 
+/** Env wins when set. An env value for a key that also lives in YAML is read as a YAML scalar. */
 function pick(
-  source: Source,
+  where: Locations,
   env: EnvMap,
   yaml: { [key: string]: YamlValue },
   options: ValidateOptions,
-): unknown {
-  if (source.kind === 'env') {
-    const value = env[source.path]
-    return options.emptyStringAsUndefined && value === '' ? undefined : value
+): Picked {
+  if (where.env !== undefined) {
+    let value = env[where.env]
+    if (options.emptyStringAsUndefined && value === '') value = undefined
+    if (value !== undefined) {
+      return {
+        value: where.file === undefined ? value : parseScalar(value),
+        source: 'env',
+        path: where.env,
+      }
+    }
   }
-  return getPath(yaml, source.path)
+  if (where.file !== undefined) {
+    const value = getPath(yaml, where.file)
+    if (value !== undefined) return { value, source: 'file', path: where.file }
+  }
+  return { value: undefined, source: 'none', path: '' }
 }
 
 function runSchema(
