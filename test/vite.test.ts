@@ -5,8 +5,8 @@ import path from 'node:path'
 import { z } from 'zod'
 import type { Plugin, ViteDevServer } from 'vite'
 import { defineConfig } from '../src/index'
-import { env, file } from '../src/sources'
-import appConfig, { APP_CONFIG_GLOBAL, serializeClient } from '../src/vite'
+import { env, field, file } from '../src/sources'
+import appConfig, { APP_CONFIG_GLOBAL, APP_CONFIG_YAML_GLOBAL, serializeClient } from '../src/vite'
 
 const temps: string[] = []
 const envKeys: string[] = []
@@ -105,6 +105,25 @@ function callConfigHook(plugin: Plugin): Record<string, string> {
   return (result.define ?? {}) as Record<string, string>
 }
 
+/** Call the plugin's configEnvironment hook the way Vite does and return the define map. */
+function callConfigEnvironment(
+  plugin: Plugin,
+  name: string,
+  consumer?: 'client' | 'server',
+): Record<string, string> | undefined {
+  const hook = plugin.configEnvironment
+  if (typeof hook !== 'function') throw new Error('expected a plain function configEnvironment hook')
+  const result = hook.call(
+    undefined as never,
+    name,
+    consumer === undefined ? {} : { consumer },
+    { command: 'build', mode: 'production' },
+  )
+  if (result === null || result === undefined) return undefined
+  if (result instanceof Promise) throw new Error('expected a sync hook')
+  return (result.define ?? {}) as Record<string, string>
+}
+
 interface FakeServer {
   watcher: { add: ReturnType<typeof vi.fn>; on: ReturnType<typeof vi.fn> }
   restart: ReturnType<typeof vi.fn>
@@ -182,6 +201,30 @@ describe('the vite plugin', () => {
       appName: 'shop',
       ui: { theme: 'dark', apiUrl: 'https://api.example.com' },
     })
+  })
+
+  test('server environments get the baked yaml, the client environment does not', () => {
+    const DB = envKey('VITE_PLUGIN_WORKER_DATABASE_URL')
+    const root = tempRoot({
+      '.env': `${DB}=postgres://localhost/app\n`,
+      'config.default.yml': 'api:\n  port: 3000\napp:\n  name: shop\nunused: 1\n',
+    })
+    const plugin = appConfig({
+      root,
+      mode: 'test',
+      server: { api: { port: field(z.number(), { env: 'PORT' }) }, databaseUrl: env(DB, z.string()) },
+      client: { app: { name: field(z.string()) } },
+    })
+
+    const worker = callConfigEnvironment(plugin, 'worker', 'server')
+    expect(Object.keys(worker ?? {})).toEqual([`globalThis.${APP_CONFIG_YAML_GLOBAL}`])
+    const value = worker?.[`globalThis.${APP_CONFIG_YAML_GLOBAL}`] as string
+    expect(JSON.parse(value)).toEqual({ api: { port: 3000 }, app: { name: 'shop' } })
+    expect(value).not.toContain('postgres://localhost/app')
+
+    expect(callConfigEnvironment(plugin, 'client', 'client')).toBeUndefined()
+    expect(callConfigEnvironment(plugin, 'client')).toBeUndefined()
+    expect(callConfigEnvironment(plugin, 'ssr')).toBeDefined()
   })
 
   test('loads once even when the hook runs twice', () => {
@@ -276,6 +319,25 @@ describe('the vite plugin in dev', () => {
     })
   })
 
+  test('a restart makes the environment hook bake the yaml again', () => {
+    const root = tempRoot({ 'config.default.yml': 'app:\n  name: shop\n' })
+    const plugin = appConfig({ root, mode: 'test', client: { app: { name: field(z.string()) } } })
+    const server = fakeServer()
+
+    expect(callConfigEnvironment(plugin, 'worker', 'server')).toEqual(
+      callConfigEnvironment(plugin, 'worker', 'server'),
+    )
+    callConfigureServer(plugin, server)
+
+    fs.writeFileSync(path.join(root, 'config.default.yml'), 'app:\n  name: later\n')
+    listener(server, 'change')(path.join(root, 'config.default.yml'))
+
+    const define = callConfigEnvironment(plugin, 'worker', 'server')
+    expect(JSON.parse(define?.[`globalThis.${APP_CONFIG_YAML_GLOBAL}`] as string)).toEqual({
+      app: { name: 'later' },
+    })
+  })
+
   test('watch false registers nothing', () => {
     const { plugin } = devPlugin({ watch: false })
     const server = fakeServer()
@@ -296,6 +358,16 @@ describe('the vite module', () => {
     }
 
     expect(literal('src/vite.ts')).toBe(literal('src/client.ts'))
+  })
+
+  test('uses the same yaml global name as the baked entry', () => {
+    const literal = (source: string): string => {
+      const match = /APP_CONFIG_YAML_GLOBAL = '([^']+)'/.exec(read(source))
+      if (match?.[1] === undefined) throw new Error(`no APP_CONFIG_YAML_GLOBAL in ${source}`)
+      return match[1]
+    }
+
+    expect(literal('src/vite.ts')).toBe(literal('src/baked.ts'))
   })
 
   test('imports nothing from vite at runtime', () => {
