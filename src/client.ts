@@ -36,8 +36,9 @@ export function defineConfig<S extends Section, C extends Section>(
   }
 }
 
+/** Spelled out as a member expression so the Vite plugin's `define` can substitute it. */
 function readGlobal<C extends Section>(): InferSection<C> {
-  const value = (globalThis as Record<string, unknown>)[APP_CONFIG_GLOBAL]
+  const value = (globalThis as { __APP_CONFIG__?: unknown }).__APP_CONFIG__
   if (value === undefined) throw new Error(missingGlobalMessage())
   return value as InferSection<C>
 }

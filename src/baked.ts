@@ -50,9 +50,14 @@ export function createBakedConfig<S extends Section, C extends Section>(
   }
 }
 
-/** Read the baked YAML the Vite plugin defined, with a pointer at the plugin when it is missing. */
+/**
+ * Read the baked YAML the Vite plugin defined, with a pointer at the plugin when
+ * it is missing. The member expression is spelled out because `define` only
+ * substitutes a literal `globalThis.__APP_CONFIG_YAML__`; an indexed read
+ * through the constant would be left alone and always miss.
+ */
 export function readBakedYaml(): YamlObject {
-  const value = (globalThis as Record<string, unknown>)[APP_CONFIG_YAML_GLOBAL]
+  const value = (globalThis as { __APP_CONFIG_YAML__?: unknown }).__APP_CONFIG_YAML__
   if (value === undefined) {
     throw new Error(
       [
