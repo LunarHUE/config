@@ -370,6 +370,15 @@ describe('the vite module', () => {
     expect(literal('src/vite.ts')).toBe(literal('src/baked.ts'))
   })
 
+  test('the entries read the globals as member expressions so define can substitute them', () => {
+    expect(read('src/client.ts')).toMatch(/globalThis as \{ __APP_CONFIG__\?: unknown \}\)\.__APP_CONFIG__/)
+    expect(read('src/baked.ts')).toMatch(
+      /globalThis as \{ __APP_CONFIG_YAML__\?: unknown \}\)\.__APP_CONFIG_YAML__/,
+    )
+    expect(read('src/client.ts')).not.toMatch(/\[APP_CONFIG_GLOBAL\]/)
+    expect(read('src/baked.ts')).not.toMatch(/\[APP_CONFIG_YAML_GLOBAL\]/)
+  })
+
   test('imports nothing from vite at runtime', () => {
     const lines = read('src/vite.ts')
       .split('\n')
